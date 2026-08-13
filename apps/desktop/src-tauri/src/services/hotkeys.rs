@@ -19,7 +19,7 @@ pub fn build_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             "quit" => app.exit(0),
             "ask" => {
                 let state = app.state::<AppState>();
-                if let Err(error) = state.cursor_companion.show_anchored_idle(app) {
+                if let Err(error) = state.cursor_companion.follow(app) {
                     tracing::warn!(
                         component = "cursor_companion",
                         operation = "show_from_tray",

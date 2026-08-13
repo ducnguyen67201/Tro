@@ -102,10 +102,10 @@ pub fn stop_assistant(
     state.audio.stop();
     state.input.release_all()?;
     overlay::show_all(&app);
-    if let Err(error) = state.cursor_companion.hide(&app) {
+    if let Err(error) = state.cursor_companion.follow(&app) {
         tracing::warn!(
             component = "cursor_companion",
-            operation = "hide_after_stop",
+            operation = "restore_after_stop",
             error_code = "window_operation_failed",
             source = %error
         );

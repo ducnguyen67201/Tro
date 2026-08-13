@@ -8,9 +8,7 @@ use std::{
 };
 
 use objc2_core_graphics::{CGEventSource, CGEventSourceStateID};
-use tauri::{AppHandle, Emitter, Manager};
-
-use crate::app_state::AppState;
+use tauri::{AppHandle, Emitter};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(8);
 const COMMAND_LEFT: u16 = 55;
@@ -127,19 +125,6 @@ fn listen(stop: Arc<AtomicBool>, app: AppHandle) {
 }
 
 fn handle_transition(app: &AppHandle, transition: ChordTransition) {
-    let state = app.state::<AppState>();
-    let companion_result = match transition {
-        ChordTransition::Pressed => state.cursor_companion.follow(app),
-        ChordTransition::Released => state.cursor_companion.anchor(app),
-    };
-    if let Err(error) = companion_result {
-        tracing::warn!(
-            component = "cursor_companion",
-            operation = "modifier_transition",
-            error_code = "window_operation_failed",
-            source = %error
-        );
-    }
     let action = match transition {
         ChordTransition::Pressed => "ask",
         ChordTransition::Released => "ask_release",

@@ -19,14 +19,22 @@ pub fn hide_main_window(app: AppHandle) -> Result<(), AppError> {
 }
 
 #[tauri::command]
+pub fn follow_cursor_companion(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
+    state
+        .cursor_companion
+        .follow(&app)
+        .map_err(|error| window_error("follow_cursor_companion", error))
+}
+
+#[tauri::command]
 pub fn dismiss_cursor_companion(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), AppError> {
     state
         .cursor_companion
-        .hide(&app)
-        .map_err(|error| window_error("hide_cursor_companion", error))
+        .follow(&app)
+        .map_err(|error| window_error("restore_cursor_companion", error))
 }
 
 pub fn show_main(app: &AppHandle) -> Result<(), AppError> {

@@ -59,6 +59,7 @@ pub fn run() {
             commands::window::get_cursor_companion_snapshot,
             commands::window::show_main_window,
             commands::window::hide_main_window,
+            commands::window::follow_cursor_companion,
             commands::window::dismiss_cursor_companion,
         ])
         .run(tauri::generate_context!())
@@ -84,19 +85,6 @@ fn register_shortcuts(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Er
         app.global_shortcut()
             .on_shortcut(shortcut, move |handle, _, event| {
                 if action == "ask" {
-                    let state = handle.state::<AppState>();
-                    let result = match event.state {
-                        ShortcutState::Pressed => state.cursor_companion.follow(handle),
-                        ShortcutState::Released => state.cursor_companion.anchor(handle),
-                    };
-                    if let Err(error) = result {
-                        tracing::warn!(
-                            component = "cursor_companion",
-                            operation = "shortcut_transition",
-                            error_code = "window_operation_failed",
-                            source = %error
-                        );
-                    }
                     let emitted_action = if event.state == ShortcutState::Pressed {
                         "ask"
                     } else {

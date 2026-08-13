@@ -13,6 +13,7 @@ const bridge = vi.hoisted(() => ({
   setConfirmation: vi.fn(),
   showMainWindow: vi.fn(() => Promise.resolve()),
   hideMainWindow: vi.fn(() => Promise.resolve()),
+  followCursorCompanion: vi.fn(() => Promise.resolve()),
   startAssistant: vi.fn(() => Promise.resolve()),
   finishAssistant: vi.fn(() => Promise.resolve()),
   emergencyStop: vi.fn(() => Promise.resolve()),
@@ -81,6 +82,7 @@ vi.mock("./lib/tauri", () => ({
     }),
     showMainWindow: bridge.showMainWindow,
     hideMainWindow: bridge.hideMainWindow,
+    followCursorCompanion: bridge.followCursorCompanion,
     startAssistant: bridge.startAssistant,
     finishAssistant: bridge.finishAssistant,
     emergencyStop: bridge.emergencyStop,
@@ -128,15 +130,17 @@ describe("App background lifecycle", () => {
     expect(localStorage.getItem("tro.onboarded")).toBe("true");
     await waitFor(() => {
       expect(bridge.hideMainWindow).toHaveBeenCalled();
+      expect(bridge.followCursorCompanion).toHaveBeenCalled();
     });
   });
 
-  test("stays hidden when onboarding is already complete", async () => {
+  test("keeps the main window hidden and starts the cursor follower", async () => {
     localStorage.setItem("tro.onboarded", "true");
     const { container } = render(<App />);
 
     await waitFor(() => {
       expect(bridge.hideMainWindow).toHaveBeenCalled();
+      expect(bridge.followCursorCompanion).toHaveBeenCalled();
     });
     expect(container).toBeEmptyDOMElement();
     expect(bridge.showMainWindow).not.toHaveBeenCalled();

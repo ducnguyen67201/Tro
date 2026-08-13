@@ -74,6 +74,7 @@ export default function App() {
       };
     }
 
+    void desktop.followCursorCompanion();
     void desktop
       .permissions()
       .then((permissions) => {
@@ -99,6 +100,7 @@ export default function App() {
         onComplete={() => {
           localStorage.setItem("tro.onboarded", "true");
           setOnboarded(true);
+          void desktop.followCursorCompanion();
           void desktop.hideMainWindow();
         }}
       />

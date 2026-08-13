@@ -79,6 +79,8 @@ export const desktop = {
     inTauri() ? invoke("show_main_window") : undefined,
   hideMainWindow: async (): Promise<void> =>
     inTauri() ? invoke("hide_main_window") : undefined,
+  followCursorCompanion: async (): Promise<void> =>
+    inTauri() ? invoke("follow_cursor_companion") : undefined,
   dismissCursorCompanion: async (): Promise<void> =>
     inTauri() ? invoke("dismiss_cursor_companion") : undefined,
   resolveConfirmation: async (

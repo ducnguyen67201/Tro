@@ -45,6 +45,7 @@ pub fn start_agent(
         snapshot.clone()
     };
     state.reset_cancellation();
+    sync_cursor_companion(&app, &state, snapshot.agent);
     app.emit("assistant_state_changed", snapshot)
         .map_err(|_| internal("Không thể cập nhật trạng thái agent."))
 }
@@ -84,14 +85,6 @@ pub fn emergency_stop(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .clear();
     overlay::show_all(&app);
-    if let Err(error) = state.cursor_companion.hide(&app) {
-        tracing::warn!(
-            component = "cursor_companion",
-            operation = "hide_after_emergency_stop",
-            error_code = "window_operation_failed",
-            source = %error
-        );
-    }
     let snapshot = {
         let mut snapshot = state
             .snapshot
@@ -107,6 +100,57 @@ pub fn emergency_stop(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
         snapshot.status_vi = "Đã dừng an toàn.".to_owned();
         snapshot.clone()
     };
+    sync_cursor_companion(&app, &state, snapshot.agent);
     app.emit("assistant_state_changed", snapshot)
         .map_err(|_| internal("Không thể cập nhật trạng thái dừng."))
+}
+
+fn sync_cursor_companion(app: &AppHandle, state: &State<'_, AppState>, agent: AgentState) {
+    let result = if companion_should_follow(agent) {
+        state.cursor_companion.follow(app)
+    } else {
+        state.cursor_companion.hide(app)
+    };
+    if let Err(error) = result {
+        tracing::warn!(
+            component = "cursor_companion",
+            operation = "sync_agent_state",
+            error_code = "window_operation_failed",
+            source = %error
+        );
+    }
+}
+
+fn companion_should_follow(agent: AgentState) -> bool {
+    matches!(
+        agent,
+        AgentState::Idle | AgentState::Completed | AgentState::Stopped | AgentState::Failed
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use contracts::AgentState;
+
+    use super::companion_should_follow;
+
+    #[test]
+    fn companion_follows_only_outside_an_active_task() {
+        for state in [
+            AgentState::Idle,
+            AgentState::Completed,
+            AgentState::Stopped,
+            AgentState::Failed,
+        ] {
+            assert!(companion_should_follow(state));
+        }
+        for state in [
+            AgentState::Planning,
+            AgentState::AwaitingConfirmation,
+            AgentState::Executing,
+            AgentState::Observing,
+        ] {
+            assert!(!companion_should_follow(state));
+        }
+    }
 }

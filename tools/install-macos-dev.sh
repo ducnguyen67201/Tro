@@ -29,7 +29,16 @@ printf '%s\n' 'designated => identifier "vn.tro.desktop"' |
 
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$BUILD_APP"
 /usr/bin/pkill -f '^/Applications/Tro\.app/Contents/MacOS/desktop$' 2>/dev/null || true
+attempt=0
+while /usr/bin/pgrep -f '^/Applications/Tro\.app/Contents/MacOS/desktop$' >/dev/null; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 50 ]; then
+    printf '%s\n' "Tro did not exit in time." >&2
+    exit 1
+  fi
+  sleep 0.1
+done
 /usr/bin/ditto "$BUILD_APP" "$INSTALL_APP"
-/usr/bin/open -a "$INSTALL_APP"
+/usr/bin/open "$INSTALL_APP"
 
 printf '%s\n' "Installed the stable development build at $INSTALL_APP"
