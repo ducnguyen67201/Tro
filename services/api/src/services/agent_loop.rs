@@ -33,6 +33,7 @@ pub async fn create(
         turn_number: 0,
         actions: provider.actions,
         completed: provider.completed,
+        message_vi: provider.message_vi,
     };
     let record = AgentRunRecord {
         id: run_id,
@@ -116,6 +117,7 @@ pub async fn turn(
         turn_number: metadata.turn_number,
         actions: provider.actions,
         completed: provider.completed,
+        message_vi: provider.message_vi,
     };
     run.continuation_encrypted = encrypt_continuation(state, &provider.continuation_id)?;
     run.turn_count = run.turn_count.saturating_add(1);

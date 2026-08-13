@@ -19,7 +19,9 @@ TRO_API_JOB="vn.tro.api.doppler-dev"
 TRO_DOPPLER_PROJECT="tro"
 TRO_BACKEND_CONFIG="dev"
 TRO_DESKTOP_CONFIG="dev_desktop"
-TRO_HEALTH_URL="http://127.0.0.1:8080/healthz"
+TRO_API_BIND_ADDR="127.0.0.1:18080"
+TRO_API_URL="http://$TRO_API_BIND_ADDR"
+TRO_HEALTH_URL="$TRO_API_URL/healthz"
 
 cd "$REPO_ROOT"
 cargo build -p api
@@ -79,7 +81,11 @@ fi
   -- "$DOPPLER_EXECUTABLE" run \
   --project "$TRO_DOPPLER_PROJECT" \
   --config "$TRO_BACKEND_CONFIG" \
-  -- "$TRO_API_EXECUTABLE"
+  -- /usr/bin/env \
+  AGENT_ENABLED=true \
+  BIND_ADDR="$TRO_API_BIND_ADDR" \
+  REALTIME_ENABLED=false \
+  "$TRO_API_EXECUTABLE"
 attempt=0
 while ! /usr/bin/curl --fail --silent --max-time 1 "$TRO_HEALTH_URL" >/dev/null; do
   attempt=$((attempt + 1))
@@ -98,7 +104,9 @@ done
   -- "$DOPPLER_EXECUTABLE" run \
   --project "$TRO_DOPPLER_PROJECT" \
   --config "$TRO_DESKTOP_CONFIG" \
-  -- "$TRO_EXECUTABLE"
+  -- /usr/bin/env \
+  TRO_API_BASE_URL="$TRO_API_URL" \
+  "$TRO_EXECUTABLE"
 attempt=0
 while ! /usr/bin/pgrep -f '^/Applications/Tro\.app/Contents/MacOS/desktop$' >/dev/null; do
   attempt=$((attempt + 1))

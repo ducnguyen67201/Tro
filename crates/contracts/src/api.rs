@@ -77,6 +77,8 @@ pub struct AgentTurnResponse {
     pub turn_number: u32,
     pub actions: Vec<PlannedComputerAction>,
     pub completed: bool,
+    #[serde(default)]
+    pub message_vi: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

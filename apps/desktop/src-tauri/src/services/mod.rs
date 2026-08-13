@@ -13,3 +13,4 @@ pub mod modifier_shortcut;
 pub mod overlay;
 pub mod realtime;
 pub mod secrets;
+pub mod speech;

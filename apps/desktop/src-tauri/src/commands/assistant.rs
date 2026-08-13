@@ -25,6 +25,7 @@ pub async fn start_assistant(
         return Err(internal("Nguồn yêu cầu không hợp lệ."));
     }
     let token = state.reset_cancellation();
+    state.speech.stop();
     state
         .pending_frame
         .lock()
@@ -122,7 +123,8 @@ pub async fn finish_assistant(
     match result {
         Ok(response) => {
             let computer_goal = response.computer_goal;
-            set_assistant_response(&app, &state, response.guidance)?;
+            let guidance = response.guidance;
+            set_assistant_response(&app, &state, guidance.clone())?;
             if let Some(goal) = computer_goal {
                 set_assistant(
                     &app,
@@ -133,6 +135,7 @@ pub async fn finish_assistant(
                 crate::commands::agent::run_agent_goal(&app, &state, &goal).await
             } else {
                 show_result_card(&app, &state);
+                crate::services::speech::speak_best_effort(state.speech.clone(), guidance).await;
                 Ok(())
             }
         }
@@ -151,6 +154,7 @@ pub fn stop_assistant(
     }
     state.cancellation().cancel();
     state.audio.stop();
+    state.speech.stop();
     state
         .pending_frame
         .lock()
@@ -243,6 +247,7 @@ fn fail_and_show(
     error: AppError,
 ) -> Result<(), AppError> {
     state.audio.stop();
+    state.speech.stop();
     state
         .pending_frame
         .lock()

@@ -107,12 +107,12 @@ async fn run_loop(app: &AppHandle, state: &AppState, goal: &str) -> Result<(), A
             return stop_remote_and_error(state, &config, &mut active_run, error).await;
         }
         if response.completed {
-            set_agent(
-                app,
-                state,
-                AgentEvent::Complete,
-                "Tro đã hoàn thành tác vụ.",
-            )?;
+            let message_vi = response
+                .message_vi
+                .take()
+                .unwrap_or_else(|| "Tro đã hoàn thành tác vụ.".to_owned());
+            set_agent(app, state, AgentEvent::Complete, &message_vi)?;
+            crate::services::speech::speak_best_effort(state.speech.clone(), message_vi).await;
             return Ok(());
         }
         if response.actions.len() != 1 {
@@ -366,6 +366,7 @@ async fn stop_remote_and_error(
 
 fn prepare_agent(app: &AppHandle, state: &AppState) -> Result<(), AppError> {
     state.reset_cancellation();
+    state.speech.stop();
     state
         .confirmation
         .lock()
@@ -458,6 +459,7 @@ pub fn resolve_confirmation(
 pub fn emergency_stop(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
     state.cancellation().cancel();
     state.audio.stop();
+    state.speech.stop();
     state.cancel_confirmation_waiter();
     state
         .pending_frame

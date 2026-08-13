@@ -17,6 +17,7 @@ use crate::{
         foreground::{ForegroundContextBackend, PlatformForegroundBackend},
         input::{InputBackend, NativeInputBackend},
         llm::{LlmConfig, LlmGateway},
+        speech::{NativeSpeechBackend, SpeechBackend},
     },
 };
 
@@ -32,6 +33,7 @@ pub struct AppState {
     pub llm_config: RwLock<LlmConfig>,
     pub input: Arc<dyn InputBackend>,
     pub foreground: Arc<dyn ForegroundContextBackend>,
+    pub speech: Arc<dyn SpeechBackend>,
     pub confirmation: Mutex<ConfirmationManager>,
     confirmation_waiter: Mutex<Option<ConfirmationWaiter>>,
     pub cursor_companion: CursorCompanion,
@@ -54,6 +56,7 @@ impl AppState {
             llm_config: RwLock::new(LlmConfig::load()),
             input: Arc::new(NativeInputBackend),
             foreground: Arc::new(PlatformForegroundBackend),
+            speech: Arc::new(NativeSpeechBackend::default()),
             confirmation: Mutex::new(ConfirmationManager::default()),
             confirmation_waiter: Mutex::new(None),
             cursor_companion: CursorCompanion::default(),
@@ -83,6 +86,7 @@ impl AppState {
     pub fn reset_after_restart(&self) {
         self.cancellation().cancel();
         self.audio.stop();
+        self.speech.stop();
         self.pending_frame
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
