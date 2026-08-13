@@ -50,6 +50,11 @@ describe("CursorAssistant", () => {
     await waitFor(() => {
       expect(container.querySelector(".cursor-following")).toBeInTheDocument();
     });
+    expect(container.querySelector(".cursor-orb img")).toHaveAttribute(
+      "src",
+      "/tro-companion-v1.png",
+    );
+    expect(screen.queryByText("T")).not.toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 

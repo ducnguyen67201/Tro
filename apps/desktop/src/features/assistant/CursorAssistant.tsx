@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import type { AppSnapshot, CursorCompanionPhase } from "../../lib/contracts";
 import { desktop } from "../../lib/tauri";
 
+const companionImage = "/tro-companion-v1.png";
+
 const initialSnapshot: AppSnapshot = {
   assistant: "idle",
   agent: "idle",
@@ -78,7 +80,7 @@ export function CursorAssistant() {
         aria-hidden="true"
       >
         <div className="cursor-orb">
-          <span>T</span>
+          <img src={companionImage} alt="" draggable={false} />
           <i />
         </div>
       </div>
@@ -103,7 +105,7 @@ export function CursorAssistant() {
         className={`cursor-card-orb state-${snapshot.assistant}`}
         aria-hidden="true"
       >
-        <span>T</span>
+        <img src={companionImage} alt="" draggable={false} />
       </div>
       <div className="cursor-card-copy">
         <strong>{stateLabels[snapshot.assistant]}</strong>
