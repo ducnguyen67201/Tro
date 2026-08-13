@@ -5,6 +5,8 @@ import { Onboarding } from "./features/onboarding/Onboarding";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { desktop } from "./lib/tauri";
 
+const MAX_HOLD_TO_TALK_MS = 30_000;
+
 export default function App() {
   const [onboarded, setOnboarded] = useState(
     () => localStorage.getItem("tro.onboarded") === "true",
@@ -15,7 +17,13 @@ export default function App() {
 
   useEffect(() => {
     let disposed = false;
-    let pendingAskStart: Promise<void> | undefined;
+    let pendingAsk:
+      | {
+          start: Promise<void>;
+          timeout: ReturnType<typeof window.setTimeout>;
+          finished: boolean;
+        }
+      | undefined;
     const unlisteners: Array<() => void> = [];
     const own = (registration: Promise<() => void>) => {
       void registration
@@ -24,6 +32,18 @@ export default function App() {
           else unlisteners.push(unlisten);
         })
         .catch(() => undefined);
+    };
+
+    const finishPendingAsk = (reason: string) => {
+      const current = pendingAsk;
+      if (!current || current.finished) return;
+
+      current.finished = true;
+      window.clearTimeout(current.timeout);
+      pendingAsk = undefined;
+      void current.start.then(() =>
+        desktop.finishAssistant(reason).catch(() => undefined),
+      );
     };
 
     void desktop
@@ -35,19 +55,24 @@ export default function App() {
     own(
       desktop.onGlobalShortcut((action) => {
         if (action === "ask") {
-          pendingAskStart = desktop
-            .startAssistant("command_option")
-            .catch(() => undefined);
+          if (pendingAsk) return;
+
+          const current = {
+            start: desktop
+              .startAssistant("command_option")
+              .catch(() => undefined),
+            timeout: 0 as ReturnType<typeof window.setTimeout>,
+            finished: false,
+          };
+          current.timeout = window.setTimeout(() => {
+            if (pendingAsk === current) {
+              finishPendingAsk("command_option_timeout");
+            }
+          }, MAX_HOLD_TO_TALK_MS);
+          pendingAsk = current;
         }
         if (action === "ask_release") {
-          const start = pendingAskStart;
-          pendingAskStart = undefined;
-          const finish = () =>
-            desktop
-              .finishAssistant("command_option_released")
-              .catch(() => undefined);
-          if (start) void start.then(finish);
-          else void finish();
+          finishPendingAsk("command_option_released");
         }
         if (action === "dictation") void desktop.startAssistant();
         if (action === "stop") void desktop.emergencyStop();
@@ -61,6 +86,7 @@ export default function App() {
 
     return () => {
       disposed = true;
+      if (pendingAsk) window.clearTimeout(pendingAsk.timeout);
       for (const unlisten of unlisteners) unlisten();
     };
   }, [setConfirmation, setSnapshot]);

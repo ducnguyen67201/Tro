@@ -186,6 +186,30 @@ mod tests {
     }
 
     #[test]
+    fn releases_when_either_modifier_is_lifted() {
+        for released in [
+            ModifierState {
+                command: false,
+                option: true,
+            },
+            ModifierState {
+                command: true,
+                option: false,
+            },
+        ] {
+            let mut chord = CommandOptionChord::default();
+            assert_eq!(
+                chord.update(ModifierState {
+                    command: true,
+                    option: true,
+                }),
+                Some(ChordTransition::Pressed)
+            );
+            assert_eq!(chord.update(released), Some(ChordTransition::Released));
+        }
+    }
+
+    #[test]
     fn emits_only_one_transition_per_edge() {
         let mut chord = CommandOptionChord::default();
         let active = ModifierState {

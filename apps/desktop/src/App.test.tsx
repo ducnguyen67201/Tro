@@ -94,6 +94,7 @@ describe("App background lifecycle", () => {
   const storage = new Map<string, string>();
 
   beforeEach(() => {
+    vi.useRealTimers();
     storage.clear();
     vi.stubGlobal("localStorage", {
       getItem: (key: string) => storage.get(key) ?? null,
@@ -228,5 +229,44 @@ describe("App background lifecycle", () => {
     await waitFor(() => {
       expect(bridge.finishAssistant).toHaveBeenCalledOnce();
     });
+  });
+
+  test("finishes a hold only once when release events are duplicated", async () => {
+    localStorage.setItem("tro.onboarded", "true");
+    render(<App />);
+    await waitFor(() => expect(bridge.shortcut).toBeTypeOf("function"));
+
+    act(() => {
+      bridge.shortcut?.("ask");
+      bridge.shortcut?.("ask_release");
+      bridge.shortcut?.("ask_release");
+    });
+
+    await waitFor(() => {
+      expect(bridge.finishAssistant).toHaveBeenCalledOnce();
+      expect(bridge.finishAssistant).toHaveBeenCalledWith(
+        "command_option_released",
+      );
+    });
+  });
+
+  test("stops listening after the safety limit if macOS drops the release", async () => {
+    localStorage.setItem("tro.onboarded", "true");
+    render(<App />);
+    await waitFor(() => expect(bridge.shortcut).toBeTypeOf("function"));
+    vi.useFakeTimers();
+
+    act(() => {
+      bridge.shortcut?.("ask");
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(30_000);
+      await Promise.resolve();
+    });
+
+    expect(bridge.finishAssistant).toHaveBeenCalledOnce();
+    expect(bridge.finishAssistant).toHaveBeenCalledWith(
+      "command_option_timeout",
+    );
   });
 });
