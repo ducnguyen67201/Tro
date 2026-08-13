@@ -12,7 +12,13 @@ const label =
     ? getCurrentWindow().label
     : "main";
 
-const Root = label.startsWith("overlay-")
+const isOverlayWindow = label.startsWith("overlay-");
+
+if (isOverlayWindow) {
+  document.documentElement.dataset.windowKind = "overlay";
+}
+
+const Root = isOverlayWindow
   ? OverlayCanvas
   : label === "confirmation"
     ? ConfirmationDialog

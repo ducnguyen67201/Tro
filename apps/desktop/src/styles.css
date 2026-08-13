@@ -32,6 +32,11 @@ body {
     #eeebe1 100%
   );
 }
+html[data-window-kind="overlay"],
+html[data-window-kind="overlay"] body,
+html[data-window-kind="overlay"] #root {
+  background: transparent;
+}
 button,
 input,
 textarea {
