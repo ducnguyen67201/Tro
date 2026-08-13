@@ -106,10 +106,10 @@ pub fn emergency_stop(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
 }
 
 fn sync_cursor_companion(app: &AppHandle, state: &State<'_, AppState>, agent: AgentState) {
-    let result = if companion_should_follow(agent) {
-        state.cursor_companion.follow(app)
-    } else {
-        state.cursor_companion.hide(app)
+    let result = match companion_behavior(agent) {
+        CompanionBehavior::Follow => state.cursor_companion.follow(app),
+        CompanionBehavior::StayWithAction => Ok(()),
+        CompanionBehavior::ReturnToCursor => state.cursor_companion.return_to_cursor(app),
     };
     if let Err(error) = result {
         tracing::warn!(
@@ -121,36 +121,49 @@ fn sync_cursor_companion(app: &AppHandle, state: &State<'_, AppState>, agent: Ag
     }
 }
 
-fn companion_should_follow(agent: AgentState) -> bool {
-    matches!(
-        agent,
-        AgentState::Idle | AgentState::Completed | AgentState::Stopped | AgentState::Failed
-    )
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CompanionBehavior {
+    Follow,
+    StayWithAction,
+    ReturnToCursor,
+}
+
+fn companion_behavior(agent: AgentState) -> CompanionBehavior {
+    match agent {
+        AgentState::Idle | AgentState::Planning | AgentState::AwaitingConfirmation => {
+            CompanionBehavior::Follow
+        }
+        AgentState::Executing | AgentState::Observing => CompanionBehavior::StayWithAction,
+        AgentState::Completed | AgentState::Stopped | AgentState::Failed => {
+            CompanionBehavior::ReturnToCursor
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use contracts::AgentState;
 
-    use super::companion_should_follow;
+    use super::{CompanionBehavior, companion_behavior};
 
     #[test]
-    fn companion_follows_only_outside_an_active_task() {
+    fn companion_waits_at_cursor_until_an_action_has_a_target() {
         for state in [
             AgentState::Idle,
+            AgentState::Planning,
+            AgentState::AwaitingConfirmation,
+        ] {
+            assert_eq!(companion_behavior(state), CompanionBehavior::Follow);
+        }
+        for state in [AgentState::Executing, AgentState::Observing] {
+            assert_eq!(companion_behavior(state), CompanionBehavior::StayWithAction);
+        }
+        for state in [
             AgentState::Completed,
             AgentState::Stopped,
             AgentState::Failed,
         ] {
-            assert!(companion_should_follow(state));
-        }
-        for state in [
-            AgentState::Planning,
-            AgentState::AwaitingConfirmation,
-            AgentState::Executing,
-            AgentState::Observing,
-        ] {
-            assert!(!companion_should_follow(state));
+            assert_eq!(companion_behavior(state), CompanionBehavior::ReturnToCursor);
         }
     }
 }

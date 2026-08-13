@@ -696,6 +696,16 @@ footer button {
   border-radius: 50%;
   animation: cursor-pulse 1.1s ease-out infinite;
 }
+.cursor-following.is-acting .cursor-orb {
+  background: linear-gradient(145deg, #39c990, #167d63);
+  box-shadow:
+    0 5px 16px rgba(18, 116, 88, 0.42),
+    0 0 0 5px rgba(57, 201, 144, 0.18);
+}
+.cursor-following.is-acting .cursor-orb i {
+  border-color: rgba(57, 201, 144, 0.62);
+  animation-duration: 620ms;
+}
 .cursor-card {
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr) auto;

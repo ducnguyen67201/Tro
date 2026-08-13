@@ -25,7 +25,11 @@ export interface AppSnapshot {
   capture_active: boolean;
 }
 
-export type CursorCompanionPhase = "hidden" | "following" | "anchored";
+export type CursorCompanionPhase =
+  | "hidden"
+  | "following"
+  | "acting"
+  | "anchored";
 
 export interface CursorCompanionSnapshot {
   phase: CursorCompanionPhase;

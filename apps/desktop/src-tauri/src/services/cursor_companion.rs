@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use contracts::{CursorCompanionPhase, CursorCompanionSnapshot};
+use contracts::{CursorCompanionPhase, CursorCompanionSnapshot, PhysicalPoint};
 use tauri::{
     AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder,
     utils::config::BackgroundThrottlingPolicy,
@@ -21,6 +21,7 @@ const CARD_WIDTH: f64 = 380.0;
 const CARD_HEIGHT: f64 = 190.0;
 const CURSOR_GAP: f64 = 16.0;
 const TRACK_INTERVAL: Duration = Duration::from_millis(16);
+const TRAVEL_DURATION: Duration = Duration::from_millis(192);
 
 #[derive(Debug, Default)]
 pub struct CursorCompanion {
@@ -129,6 +130,38 @@ impl CursorCompanion {
         set_phase(&self.runtime, CursorCompanionPhase::Anchored);
         emit_phase(&window, CursorCompanionPhase::Anchored);
         window.show()
+    }
+
+    /// Moves only the visual companion. Callers must pass a target from an action that has
+    /// already passed the local action policy; this method never performs OS input itself.
+    pub fn travel_to_validated_target(
+        &self,
+        app: &AppHandle,
+        target: PhysicalPoint,
+    ) -> tauri::Result<()> {
+        self.stop_tracker();
+        let window = companion_window(app)?;
+        configure_window(&window, false, true)?;
+        let destination = acting_position(app, &window, target)?;
+        let start = window.outer_position().unwrap_or(destination);
+        set_phase(&self.runtime, CursorCompanionPhase::Acting);
+        emit_phase(&window, CursorCompanionPhase::Acting);
+        window.show()?;
+        animate_window(&window, start, destination)
+    }
+
+    /// Animates back to the user's current pointer, then resumes continuous following.
+    pub fn return_to_cursor(&self, app: &AppHandle) -> tauri::Result<()> {
+        self.stop_tracker();
+        let window = companion_window(app)?;
+        configure_window(&window, false, true)?;
+        let destination = desired_position(app, ORB_WIDTH, ORB_HEIGHT)?;
+        let start = window.outer_position().unwrap_or(destination);
+        set_phase(&self.runtime, CursorCompanionPhase::Acting);
+        emit_phase(&window, CursorCompanionPhase::Acting);
+        window.show()?;
+        animate_window(&window, start, destination)?;
+        self.follow(app)
     }
 
     pub fn show_anchored_idle(&self, app: &AppHandle) -> tauri::Result<()> {
@@ -285,6 +318,44 @@ fn desired_position(
     ))
 }
 
+fn acting_position(
+    app: &AppHandle,
+    window: &tauri::WebviewWindow,
+    target: PhysicalPoint,
+) -> tauri::Result<PhysicalPosition<i32>> {
+    let target_position = PhysicalPosition::new(f64::from(target.x), f64::from(target.y));
+    let monitor = app
+        .monitor_from_point(target_position.x, target_position.y)?
+        .or(app.primary_monitor()?)
+        .ok_or(tauri::Error::FailedToReceiveMessage)?;
+    let size = physical_size(ORB_WIDTH, ORB_HEIGHT, monitor.scale_factor());
+    window.set_size(size)?;
+    Ok(place_over_target(
+        target,
+        size,
+        monitor.work_area().position,
+        monitor.work_area().size,
+    ))
+}
+
+fn animate_window(
+    window: &tauri::WebviewWindow,
+    start: PhysicalPosition<i32>,
+    destination: PhysicalPosition<i32>,
+) -> tauri::Result<()> {
+    let frame_count =
+        u32::try_from((TRAVEL_DURATION.as_millis() / TRACK_INTERVAL.as_millis()).max(1))
+            .unwrap_or(1);
+    for frame in 1..=frame_count {
+        let progress = f64::from(frame) / f64::from(frame_count);
+        window.set_position(tween_position(start, destination, progress))?;
+        if frame < frame_count {
+            thread::sleep(TRACK_INTERVAL);
+        }
+    }
+    Ok(())
+}
+
 fn physical_size(width: f64, height: f64, scale_factor: f64) -> PhysicalSize<u32> {
     PhysicalSize::new(
         (width * scale_factor).round().max(1.0) as u32,
@@ -338,11 +409,56 @@ fn place_near_cursor(
     )
 }
 
+fn place_over_target(
+    target: PhysicalPoint,
+    window: PhysicalSize<u32>,
+    work_position: PhysicalPosition<i32>,
+    work_size: PhysicalSize<u32>,
+) -> PhysicalPosition<i32> {
+    let left = i64::from(work_position.x);
+    let top = i64::from(work_position.y);
+    let right = left.saturating_add(i64::from(work_size.width));
+    let bottom = top.saturating_add(i64::from(work_size.height));
+    let width = i64::from(window.width);
+    let height = i64::from(window.height);
+    let max_x = right.saturating_sub(width).max(left);
+    let max_y = bottom.saturating_sub(height).max(top);
+    let x = i64::from(target.x)
+        .saturating_sub(width / 2)
+        .clamp(left, max_x);
+    let y = i64::from(target.y)
+        .saturating_sub(height / 2)
+        .clamp(top, max_y);
+
+    PhysicalPosition::new(saturating_i32(x), saturating_i32(y))
+}
+
+fn tween_position(
+    start: PhysicalPosition<i32>,
+    destination: PhysicalPosition<i32>,
+    progress: f64,
+) -> PhysicalPosition<i32> {
+    let progress = progress.clamp(0.0, 1.0);
+    let eased = 1.0 - (1.0 - progress).powi(3);
+    let x = f64::from(start.x) + (f64::from(destination.x) - f64::from(start.x)) * eased;
+    let y = f64::from(start.y) + (f64::from(destination.y) - f64::from(start.y)) * eased;
+    PhysicalPosition::new(x.round() as i32, y.round() as i32)
+}
+
+fn saturating_i32(value: i64) -> i32 {
+    i32::try_from(value).unwrap_or(if value.is_negative() {
+        i32::MIN
+    } else {
+        i32::MAX
+    })
+}
+
 #[cfg(test)]
 mod tests {
+    use contracts::PhysicalPoint;
     use tauri::{PhysicalPosition, PhysicalSize};
 
-    use super::place_near_cursor;
+    use super::{place_near_cursor, place_over_target, tween_position};
 
     #[test]
     fn prefers_below_and_right_of_cursor() {
@@ -390,5 +506,32 @@ mod tests {
             16,
         );
         assert_eq!(position, PhysicalPosition::new(-100, -50));
+    }
+
+    #[test]
+    fn centers_acting_orb_on_target_and_clamps_at_edges() {
+        let centered = place_over_target(
+            PhysicalPoint { x: 500, y: 400 },
+            PhysicalSize::new(52, 52),
+            PhysicalPosition::new(0, 0),
+            PhysicalSize::new(1000, 800),
+        );
+        assert_eq!(centered, PhysicalPosition::new(474, 374));
+
+        let clamped = place_over_target(
+            PhysicalPoint { x: 995, y: 795 },
+            PhysicalSize::new(52, 52),
+            PhysicalPosition::new(0, 0),
+            PhysicalSize::new(1000, 800),
+        );
+        assert_eq!(clamped, PhysicalPosition::new(948, 748));
+    }
+
+    #[test]
+    fn travel_tween_has_exact_endpoints() {
+        let start = PhysicalPosition::new(-200, 100);
+        let destination = PhysicalPosition::new(800, 500);
+        assert_eq!(tween_position(start, destination, 0.0), start);
+        assert_eq!(tween_position(start, destination, 1.0), destination);
     }
 }

@@ -58,6 +58,7 @@ pub enum CursorCompanionPhase {
     #[default]
     Hidden,
     Following,
+    Acting,
     Anchored,
 }
 

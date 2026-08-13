@@ -63,6 +63,18 @@ describe("CursorAssistant", () => {
     expect(container.querySelector(".cursor-following")).toBeInTheDocument();
   });
 
+  test("renders a detached acting orb without opening a card", async () => {
+    bridge.companion = { phase: "acting" };
+    const { container } = render(<CursorAssistant />);
+
+    await waitFor(() => {
+      expect(
+        container.querySelector(".cursor-following.is-acting"),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
   test("shows assistant state and stops an active anchored turn", async () => {
     bridge.companion = { phase: "anchored" };
     bridge.snapshot = {

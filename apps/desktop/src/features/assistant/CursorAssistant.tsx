@@ -71,9 +71,12 @@ export function CursorAssistant() {
 
   if (phase === "hidden") return null;
 
-  if (phase === "following") {
+  if (phase === "following" || phase === "acting") {
     return (
-      <div className="cursor-following" aria-hidden="true">
+      <div
+        className={`cursor-following${phase === "acting" ? " is-acting" : ""}`}
+        aria-hidden="true"
+      >
         <div className="cursor-orb">
           <span>T</span>
           <i />
