@@ -8,7 +8,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --filter @tro/desktop dev",
+    "dev": "pnpm --filter @tro/desktop tauri dev",
+    "dev:web": "pnpm --filter @tro/desktop dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint apps/desktop/src apps/desktop/*.ts",
