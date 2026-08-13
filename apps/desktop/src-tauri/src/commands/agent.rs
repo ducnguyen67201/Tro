@@ -78,6 +78,11 @@ pub fn resolve_confirmation(
 pub fn emergency_stop(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
     state.cancellation().cancel();
     state.audio.stop();
+    state
+        .pending_frame
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
     state.input.release_all()?;
     state
         .confirmation

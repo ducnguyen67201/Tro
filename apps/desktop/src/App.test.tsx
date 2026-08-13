@@ -204,4 +204,29 @@ describe("App background lifecycle", () => {
     expect(bridge.followCursorCompanion).not.toHaveBeenCalled();
     expect(bridge.hideMainWindow).not.toHaveBeenCalled();
   });
+
+  test("waits for screen capture setup before finishing a quick key release", async () => {
+    localStorage.setItem("tro.onboarded", "true");
+    let finishStart: (() => void) | undefined;
+    bridge.startAssistant.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishStart = resolve;
+      }),
+    );
+    render(<App />);
+    await waitFor(() => expect(bridge.shortcut).toBeTypeOf("function"));
+
+    act(() => {
+      bridge.shortcut?.("ask");
+      bridge.shortcut?.("ask_release");
+    });
+    expect(bridge.finishAssistant).not.toHaveBeenCalled();
+
+    act(() => {
+      finishStart?.();
+    });
+    await waitFor(() => {
+      expect(bridge.finishAssistant).toHaveBeenCalledOnce();
+    });
+  });
 });

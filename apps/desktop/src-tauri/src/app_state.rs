@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex, RwLock};
 
-use contracts::{AgentState, AssistantUiState};
+use contracts::{AgentState, AssistantUiState, ScreenFrame};
 use tokio_util::sync::CancellationToken;
 
 #[cfg(target_os = "macos")]
@@ -13,6 +13,7 @@ use crate::{
         cursor_companion::CursorCompanion,
         foreground::{ForegroundContextBackend, PlatformForegroundBackend},
         input::{InputBackend, NativeInputBackend},
+        llm::{LlmConfig, LlmGateway},
     },
 };
 
@@ -21,6 +22,9 @@ pub struct AppState {
     pub settings: RwLock<AppSettings>,
     pub capture: Arc<dyn CaptureBackend>,
     pub audio: Arc<dyn AudioBackend>,
+    pub pending_frame: Mutex<Option<ScreenFrame>>,
+    pub llm: LlmGateway,
+    pub llm_config: RwLock<LlmConfig>,
     pub input: Arc<dyn InputBackend>,
     pub foreground: Arc<dyn ForegroundContextBackend>,
     pub confirmation: Mutex<ConfirmationManager>,
@@ -36,7 +40,10 @@ impl AppState {
             snapshot: RwLock::new(AssistantUiState::default()),
             settings: RwLock::new(AppSettings::default()),
             capture: Arc::new(XcapCaptureBackend),
-            audio: Arc::new(CpalAudioBackend),
+            audio: Arc::new(CpalAudioBackend::default()),
+            pending_frame: Mutex::new(None),
+            llm: LlmGateway::default(),
+            llm_config: RwLock::new(LlmConfig::load()),
             input: Arc::new(NativeInputBackend),
             foreground: Arc::new(PlatformForegroundBackend),
             confirmation: Mutex::new(ConfirmationManager::default()),
@@ -66,6 +73,11 @@ impl AppState {
 
     pub fn reset_after_restart(&self) {
         self.cancellation().cancel();
+        self.audio.stop();
+        self.pending_frame
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
         let _release = self.input.release_all();
         let mut snapshot = self
             .snapshot

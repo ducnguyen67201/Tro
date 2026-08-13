@@ -91,3 +91,19 @@ export interface AppSettings {
   dictation_preview: boolean;
   optional_telemetry: boolean;
 }
+
+export interface LlmConfig {
+  provider: string;
+  base_url: string;
+  model: string;
+  timeout_seconds: number;
+  api_key_configured: boolean;
+}
+
+export interface LlmConfigPatch {
+  provider?: string;
+  base_url?: string;
+  model?: string;
+  timeout_seconds?: number;
+  api_key?: string;
+}

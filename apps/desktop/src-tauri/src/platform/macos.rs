@@ -70,6 +70,14 @@ mod tests {
             Ok(())
         }
 
+        fn finish_push_to_talk(
+            &self,
+        ) -> Result<crate::services::audio::RecordedAudio, contracts::AppError> {
+            Ok(crate::services::audio::RecordedAudio {
+                wav_bytes: vec![0; 44],
+            })
+        }
+
         fn stop(&self) {}
     }
 

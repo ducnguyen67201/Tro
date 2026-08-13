@@ -46,8 +46,8 @@ export default function App() {
             desktop
               .finishAssistant("command_option_released")
               .catch(() => undefined);
-          void finish();
           if (start) void start.then(finish);
+          else void finish();
         }
         if (action === "dictation") void desktop.startAssistant();
         if (action === "stop") void desktop.emergencyStop();

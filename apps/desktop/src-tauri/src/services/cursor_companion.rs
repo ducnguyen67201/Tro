@@ -17,8 +17,8 @@ pub const WINDOW_LABEL: &str = "assistant-cursor";
 
 const ORB_WIDTH: f64 = 52.0;
 const ORB_HEIGHT: f64 = 52.0;
-const CARD_WIDTH: f64 = 380.0;
-const CARD_HEIGHT: f64 = 190.0;
+const CARD_WIDTH: f64 = 420.0;
+const CARD_HEIGHT: f64 = 270.0;
 const CURSOR_GAP: f64 = 6.0;
 const TRACK_INTERVAL: Duration = Duration::from_millis(16);
 const TRAVEL_DURATION: Duration = Duration::from_millis(192);

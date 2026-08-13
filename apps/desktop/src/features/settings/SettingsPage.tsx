@@ -3,6 +3,7 @@ import type { AppSettings, PermissionStatus } from "../../lib/contracts";
 import { PermissionCard } from "../onboarding/PermissionCard";
 import { defaultAskShortcut, desktop } from "../../lib/tauri";
 import { PrivacyPanel } from "./PrivacyPanel";
+import { LlmSettings } from "./LlmSettings";
 import { ShortcutEditor } from "./ShortcutEditor";
 
 const initial: AppSettings = {
@@ -87,6 +88,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
           />
         </section>
       ) : null}
+      <LlmSettings />
       <section className="settings-section">
         <h2>Trải nghiệm</h2>
         <label className="toggle-row">

@@ -5,6 +5,8 @@ import type {
   AppSnapshot,
   ConfirmationRequest,
   CursorCompanionSnapshot,
+  LlmConfig,
+  LlmConfigPatch,
   OverlayUpdate,
   PermissionSnapshot,
   ShortcutAction,
@@ -69,6 +71,20 @@ export const desktop = {
           optional_telemetry: false,
           ...settings,
         },
+  llmConfig: async (): Promise<LlmConfig> =>
+    inTauri()
+      ? invoke<LlmConfig>("get_llm_config")
+      : {
+          provider: "openrouter",
+          base_url: "https://openrouter.ai/api/v1",
+          model: "google/gemini-2.5-flash",
+          timeout_seconds: 20,
+          api_key_configured: false,
+        },
+  updateLlmConfig: async (patch: LlmConfigPatch): Promise<LlmConfig> =>
+    inTauri()
+      ? invoke<LlmConfig>("update_llm_config", { patch })
+      : { ...(await desktop.llmConfig()), ...patch, api_key_configured: true },
   restart: async (): Promise<void> =>
     inTauri() ? invoke("restart_app") : undefined,
   cursorCompanionSnapshot: async (): Promise<CursorCompanionSnapshot> =>

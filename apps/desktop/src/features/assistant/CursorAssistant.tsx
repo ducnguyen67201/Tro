@@ -18,7 +18,7 @@ const stateLabels: Record<AppSnapshot["assistant"], string> = {
   listening: "Đang nghe…",
   thinking: "Đang suy nghĩ…",
   speaking: "Đang trả lời…",
-  guiding: "Đang hướng dẫn…",
+  guiding: "Tro trả lời",
   failed: "Tro gặp sự cố",
 };
 
@@ -117,7 +117,10 @@ export function CursorAssistant() {
     );
   }
 
-  const active = snapshot.assistant !== "idle";
+  const active = ["capturing", "listening", "thinking", "speaking"].includes(
+    snapshot.assistant,
+  );
+  const needsReset = snapshot.assistant !== "idle";
   const detail =
     snapshot.transcript ??
     (snapshot.assistant === "idle"
@@ -125,7 +128,7 @@ export function CursorAssistant() {
       : snapshot.status_vi);
 
   const dismiss = () => {
-    if (active) void desktop.stopAssistant("cursor_card");
+    if (needsReset) void desktop.stopAssistant("cursor_card");
     else void desktop.dismissCursorCompanion();
   };
 
@@ -141,7 +144,11 @@ export function CursorAssistant() {
         <strong>{stateLabels[snapshot.assistant]}</strong>
         <p>{detail}</p>
         <small>
-          {active ? "Bạn có thể dừng bất cứ lúc nào" : "Tro đang chạy nền"}
+          {active
+            ? "Bạn có thể dừng bất cứ lúc nào"
+            : snapshot.assistant === "guiding"
+              ? "Câu trả lời chỉ nằm trong phiên hiện tại"
+              : "Tro đang chạy nền"}
         </small>
       </div>
       <button
@@ -149,7 +156,7 @@ export function CursorAssistant() {
         onClick={dismiss}
         aria-label={active ? "Dừng Tro" : "Đóng Tro"}
       >
-        {active ? "Dừng" : "Đóng"}
+        {active ? "Dừng" : "Xong"}
       </button>
     </section>
   );

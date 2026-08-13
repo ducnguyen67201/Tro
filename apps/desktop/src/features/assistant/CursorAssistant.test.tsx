@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  within,
   waitFor,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -176,6 +177,25 @@ describe("CursorAssistant", () => {
     fireEvent.click(screen.getByRole("button", { name: "Đóng Tro" }));
     expect(bridge.dismissCursorCompanion).toHaveBeenCalledOnce();
     expect(bridge.stopAssistant).not.toHaveBeenCalled();
+  });
+
+  test("closes a completed answer by resetting the assistant", async () => {
+    bridge.companion = { phase: "anchored" };
+    bridge.snapshot = {
+      ...bridge.snapshot,
+      assistant: "guiding",
+      transcript: "Hãy bắt đầu bằng cách chuyển vế.",
+    };
+    const { container } = render(<CursorAssistant />);
+
+    expect(
+      await within(container).findByText("Hãy bắt đầu bằng cách chuyển vế."),
+    ).toBeVisible();
+    fireEvent.click(
+      await within(container).findByRole("button", { name: "Đóng Tro" }),
+    );
+    expect(bridge.stopAssistant).toHaveBeenCalledWith("cursor_card");
+    expect(bridge.dismissCursorCompanion).not.toHaveBeenCalled();
   });
 
   test("unsubscribes from native events", async () => {

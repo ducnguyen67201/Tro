@@ -590,14 +590,63 @@ footer button {
   color: #565249;
   font-size: 13px;
 }
-.settings-row input {
+.settings-row input,
+.settings-row select {
   width: 280px;
   padding: 9px 11px;
   border: 1px solid var(--line);
   border-radius: 9px;
+  color: var(--ink);
+  background: white;
 }
 .toggle-row input {
   accent-color: var(--violet);
+}
+.settings-section-heading,
+.llm-settings-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+.settings-section-heading h2 {
+  margin-bottom: 5px;
+}
+.settings-section-heading p,
+.llm-settings-footer span {
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+.llm-status {
+  flex: none;
+  padding: 5px 9px;
+  color: #8f5537;
+  border-radius: 999px;
+  background: #f9e8dc;
+  font-size: 10px;
+  font-weight: 700;
+}
+.llm-status.is-ready {
+  color: #397752;
+  background: #e2f3e7;
+}
+.timeout-input {
+  display: flex;
+  width: 280px;
+  align-items: center;
+  gap: 8px;
+}
+.timeout-input input {
+  width: 88px;
+}
+.timeout-input span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.llm-settings-footer {
+  min-height: 38px;
+  margin-top: 18px;
 }
 .privacy-panel {
   display: flex;
@@ -881,14 +930,14 @@ footer button {
   letter-spacing: -0.02em;
 }
 .cursor-card-copy p {
-  display: -webkit-box;
+  display: block;
+  max-height: 136px;
   margin: 0 0 8px;
-  overflow: hidden;
+  overflow: auto;
   color: var(--muted);
   font-size: 12px;
   line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-wrap: pretty;
 }
 .cursor-card-copy small {
   color: #989287;
@@ -1022,6 +1071,10 @@ footer button {
     flex-direction: column;
   }
   .settings-row input {
+    width: 100%;
+  }
+  .settings-row select,
+  .timeout-input {
     width: 100%;
   }
 }
