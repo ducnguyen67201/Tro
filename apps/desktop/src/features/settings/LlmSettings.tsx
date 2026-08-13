@@ -3,17 +3,13 @@ import type { LlmConfig } from "../../lib/contracts";
 import { desktop } from "../../lib/tauri";
 
 const initial: LlmConfig = {
-  provider: "openrouter",
-  base_url: "https://openrouter.ai/api/v1",
-  model: "google/gemini-2.5-flash",
-  timeout_seconds: 20,
-  api_key_configured: false,
+  backend_url: "http://127.0.0.1:8080",
+  timeout_seconds: 25,
+  device_authenticated: false,
 };
 
 export function LlmSettings() {
   const [config, setConfig] = useState(initial);
-  const [apiKey, setApiKey] = useState("");
-  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -24,129 +20,42 @@ export function LlmSettings() {
         if (!disposed) setConfig(next);
       })
       .catch(() => {
-        if (!disposed) setMessage("Chưa đọc được cấu hình LLM.");
+        if (!disposed) setMessage("Chưa đọc được cấu hình máy chủ Tro.");
       });
     return () => {
       disposed = true;
     };
   }, []);
 
-  const save = () => {
-    setSaving(true);
-    setMessage("");
-    void desktop
-      .updateLlmConfig({
-        provider: config.provider,
-        base_url: config.base_url,
-        model: config.model,
-        timeout_seconds: config.timeout_seconds,
-        ...(apiKey.trim() ? { api_key: apiKey.trim() } : {}),
-      })
-      .then((next) => {
-        setConfig(next);
-        setApiKey("");
-        setMessage("Đã lưu. Key nằm trong macOS Keychain.");
-      })
-      .catch(() => {
-        setMessage("Không thể lưu cấu hình. Hãy kiểm tra key và model.");
-      })
-      .finally(() => {
-        setSaving(false);
-      });
-  };
-
   return (
     <section className="settings-section llm-settings">
       <div className="settings-section-heading">
         <div>
-          <h2>LLM</h2>
-          <p>OpenRouter tạm thời; lớp provider có thể thay thế độc lập.</p>
+          <h2>AI backend</h2>
+          <p>
+            Tro gửi yêu cầu đến máy chủ riêng. Provider và API key chỉ tồn tại ở
+            backend.
+          </p>
         </div>
         <span
-          className={`llm-status ${config.api_key_configured ? "is-ready" : ""}`}
+          className={`llm-status ${config.device_authenticated ? "is-ready" : ""}`}
         >
-          {config.api_key_configured ? "Đã có API key" : "Chưa có API key"}
+          {config.device_authenticated
+            ? "Thiết bị đã xác thực"
+            : "Chưa có phiên thiết bị"}
         </span>
       </div>
       <div className="settings-row">
-        <label htmlFor="llm-provider">Provider</label>
-        <select
-          id="llm-provider"
-          value={config.provider}
-          onChange={(event) => {
-            setConfig({ ...config, provider: event.target.value });
-          }}
-        >
-          <option value="openrouter">OpenRouter</option>
-        </select>
+        <span>Máy chủ</span>
+        <code>{config.backend_url}</code>
       </div>
       <div className="settings-row">
-        <label htmlFor="llm-model">Model</label>
-        <input
-          id="llm-model"
-          value={config.model}
-          spellCheck={false}
-          onChange={(event) => {
-            setConfig({ ...config, model: event.target.value });
-          }}
-        />
-      </div>
-      <div className="settings-row">
-        <label htmlFor="llm-base-url">Base URL</label>
-        <input
-          id="llm-base-url"
-          value={config.base_url}
-          inputMode="url"
-          spellCheck={false}
-          onChange={(event) => {
-            setConfig({ ...config, base_url: event.target.value });
-          }}
-        />
-      </div>
-      <div className="settings-row">
-        <label htmlFor="llm-timeout">Thinking timeout</label>
-        <div className="timeout-input">
-          <input
-            id="llm-timeout"
-            type="number"
-            min={5}
-            max={60}
-            value={config.timeout_seconds}
-            onChange={(event) => {
-              setConfig({
-                ...config,
-                timeout_seconds: Number(event.target.value),
-              });
-            }}
-          />
-          <span>giây</span>
-        </div>
-      </div>
-      <div className="settings-row">
-        <label htmlFor="llm-api-key">OpenRouter API key</label>
-        <input
-          id="llm-api-key"
-          type="password"
-          value={apiKey}
-          autoComplete="off"
-          placeholder={
-            config.api_key_configured ? "Để trống để giữ key cũ" : "sk-or-v1-…"
-          }
-          onChange={(event) => {
-            setApiKey(event.target.value);
-          }}
-        />
+        <span>Giới hạn chờ</span>
+        <span>{config.timeout_seconds} giây</span>
       </div>
       <div className="llm-settings-footer">
         <span role="status">{message}</span>
-        <button
-          type="button"
-          className="button primary"
-          disabled={saving}
-          onClick={save}
-        >
-          {saving ? "Đang lưu…" : "Lưu LLM"}
-        </button>
+        <span>Model được quản lý an toàn ở backend.</span>
       </div>
     </section>
   );

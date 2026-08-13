@@ -1,4 +1,4 @@
-use api::{AppConfig, AppState, FakeProvider, MemoryRepository, build_router};
+use api::{AppConfig, AppState, FakeProvider, FakeTutorProvider, MemoryRepository, build_router};
 use axum::{body::Body, http::Request};
 use http_body_util::BodyExt;
 use std::sync::Arc;
@@ -10,6 +10,7 @@ async fn health_is_content_free() {
         Arc::new(AppConfig::test()),
         Arc::new(MemoryRepository::default()),
         Arc::new(FakeProvider::default()),
+        Arc::new(FakeTutorProvider::default()),
     );
     let response = build_router(state)
         .oneshot(

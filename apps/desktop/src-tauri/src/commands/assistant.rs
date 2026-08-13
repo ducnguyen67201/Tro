@@ -125,6 +125,7 @@ pub async fn finish_assistant(
     let input = LlmTurnInput {
         audio_wav: std::mem::take(&mut audio.wav_bytes),
         screenshot_jpeg: std::mem::take(&mut frame.bytes),
+        frame: frame.meta.clone(),
     };
     let result = tokio::select! {
         () = token.cancelled() => return Ok(()),

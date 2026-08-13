@@ -93,17 +93,7 @@ export interface AppSettings {
 }
 
 export interface LlmConfig {
-  provider: string;
-  base_url: string;
-  model: string;
+  backend_url: string;
   timeout_seconds: number;
-  api_key_configured: boolean;
-}
-
-export interface LlmConfigPatch {
-  provider?: string;
-  base_url?: string;
-  model?: string;
-  timeout_seconds?: number;
-  api_key?: string;
+  device_authenticated: boolean;
 }

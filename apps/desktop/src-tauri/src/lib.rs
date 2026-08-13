@@ -57,7 +57,6 @@ pub fn run() {
             commands::permissions::restart_app,
             commands::settings::update_settings,
             commands::settings::get_llm_config,
-            commands::settings::update_llm_config,
             commands::window::get_cursor_companion_snapshot,
             commands::window::show_main_window,
             commands::window::hide_main_window,

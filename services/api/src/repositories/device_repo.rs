@@ -42,6 +42,11 @@ pub trait Repository: Send + Sync {
     async fn get_run(&self, run_id: Uuid) -> Result<Option<AgentRunRecord>, sqlx::Error>;
     async fn update_run(&self, run: AgentRunRecord) -> Result<(), sqlx::Error>;
     async fn usage_today(&self, device_id: Uuid) -> Result<UsageSnapshot, sqlx::Error>;
+    async fn reserve_tutor_usage(
+        &self,
+        device_id: Uuid,
+        screenshot_limit: u32,
+    ) -> Result<bool, sqlx::Error>;
     async fn increment_agent_usage(&self, device_id: Uuid) -> Result<(), sqlx::Error>;
 }
 
@@ -64,6 +69,18 @@ impl MemoryRepository {
             OffsetDateTime::now_utc() + Duration::days(1),
         ));
         id
+    }
+
+    pub fn seed_device_token_digest(&self, digest: String) -> Uuid {
+        let device_id = Uuid::new_v4();
+        self.tokens
+            .lock()
+            .expect("development repository mutex")
+            .insert(
+                digest,
+                (device_id, OffsetDateTime::now_utc() + Duration::days(30)),
+            );
+        device_id
     }
 }
 
@@ -184,6 +201,20 @@ impl Repository for MemoryRepository {
         entry.agent_turns = entry.agent_turns.saturating_add(1);
         entry.screenshots = entry.screenshots.saturating_add(1);
         Ok(())
+    }
+
+    async fn reserve_tutor_usage(
+        &self,
+        device_id: Uuid,
+        screenshot_limit: u32,
+    ) -> Result<bool, sqlx::Error> {
+        let mut usage = self.usage.lock().expect("test repository mutex");
+        let entry = usage.entry(device_id).or_default();
+        if entry.screenshots >= screenshot_limit {
+            return Ok(false);
+        }
+        entry.screenshots = entry.screenshots.saturating_add(1);
+        Ok(true)
     }
 }
 
@@ -374,5 +405,18 @@ impl Repository for PgRepository {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    async fn reserve_tutor_usage(
+        &self,
+        device_id: Uuid,
+        screenshot_limit: u32,
+    ) -> Result<bool, sqlx::Error> {
+        let reserved = sqlx::query_scalar::<_, i32>("INSERT INTO usage_daily (device_id, usage_date, screenshots) SELECT $1, current_date, 1 WHERE $2 > 0 ON CONFLICT (device_id, usage_date) DO UPDATE SET screenshots = usage_daily.screenshots + 1, updated_at = now() WHERE usage_daily.screenshots < $2 RETURNING screenshots")
+            .bind(device_id)
+            .bind(i32::try_from(screenshot_limit).unwrap_or(i32::MAX))
+            .fetch_optional(&self.pool)
+            .await?;
+        Ok(reserved.is_some())
     }
 }

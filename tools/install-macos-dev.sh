@@ -11,12 +11,18 @@ REPO_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 BUILD_APP="$REPO_ROOT/target/debug/bundle/macos/Tro.app"
 INSTALL_APP="/Applications/Tro.app"
 TRO_EXECUTABLE="$INSTALL_APP/Contents/MacOS/desktop"
-TRO_DEV_LOG="${TMPDIR:-/tmp}/tro-dev.log"
-TRO_DEV_JOB="vn.tro.desktop.doppler-dev"
+TRO_API_EXECUTABLE="$REPO_ROOT/target/debug/api"
+TRO_DESKTOP_LOG="${TMPDIR:-/tmp}/tro-desktop-dev.log"
+TRO_API_LOG="${TMPDIR:-/tmp}/tro-api-dev.log"
+TRO_DESKTOP_JOB="vn.tro.desktop.doppler-dev"
+TRO_API_JOB="vn.tro.api.doppler-dev"
 TRO_DOPPLER_PROJECT="tro"
-TRO_DOPPLER_CONFIG="dev"
+TRO_BACKEND_CONFIG="dev"
+TRO_DESKTOP_CONFIG="dev_desktop"
+TRO_HEALTH_URL="http://127.0.0.1:8080/healthz"
 
 cd "$REPO_ROOT"
+cargo build -p api
 pnpm --filter @tro/desktop exec tauri build --debug --bundles app
 
 # Unsigned debug builds default to a changing CDHash requirement. macOS binds
@@ -33,8 +39,10 @@ printf '%s\n' 'designated => identifier "vn.tro.desktop"' |
     "$BUILD_APP"
 
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$BUILD_APP"
-/bin/launchctl remove "$TRO_DEV_JOB" 2>/dev/null || true
+/bin/launchctl remove "$TRO_DESKTOP_JOB" 2>/dev/null || true
+/bin/launchctl remove "$TRO_API_JOB" 2>/dev/null || true
 /usr/bin/pkill -f '^/Applications/Tro\.app/Contents/MacOS/desktop$' 2>/dev/null || true
+/usr/bin/pkill -f "$TRO_API_EXECUTABLE" 2>/dev/null || true
 attempt=0
 while /usr/bin/pgrep -f '^/Applications/Tro\.app/Contents/MacOS/desktop$' >/dev/null; do
   attempt=$((attempt + 1))
@@ -51,31 +59,56 @@ if ! command -v doppler >/dev/null 2>&1; then
   exit 1
 fi
 DOPPLER_EXECUTABLE=$(command -v doppler)
-if ! doppler run --project "$TRO_DOPPLER_PROJECT" --config "$TRO_DOPPLER_CONFIG" -- \
-  sh -c 'test -n "${OPENROUTER_API_KEY:-}"'; then
-  printf '%s\n' "OPENROUTER_API_KEY is missing from the active Doppler config." >&2
+if ! doppler run --project "$TRO_DOPPLER_PROJECT" --config "$TRO_BACKEND_CONFIG" -- \
+  sh -c 'test -n "${OPENROUTER_API_KEY:-}" && test -n "${TRO_DEVICE_TOKEN:-}"'; then
+  printf '%s\n' "Backend credentials are missing from Doppler." >&2
+  exit 1
+fi
+if ! doppler run --project "$TRO_DOPPLER_PROJECT" --config "$TRO_DESKTOP_CONFIG" -- \
+  sh -c 'test -n "${TRO_DEVICE_TOKEN:-}" && test -n "${TRO_API_BASE_URL:-}" && test -z "${OPENROUTER_API_KEY:-}"'; then
+  printf '%s\n' "Desktop Doppler config is missing or contains a provider credential." >&2
   exit 1
 fi
 
-# Keep development credentials out of the app bundle and local plaintext files.
-# Doppler supplies them only to the running Tro process.
+# The backend receives provider credentials. The desktop receives only its
+# revocable Tro device token and the API URL from a separate Doppler config.
 /bin/launchctl submit \
-  -l "$TRO_DEV_JOB" \
-  -o "$TRO_DEV_LOG" \
-  -e "$TRO_DEV_LOG" \
+  -l "$TRO_API_JOB" \
+  -o "$TRO_API_LOG" \
+  -e "$TRO_API_LOG" \
   -- "$DOPPLER_EXECUTABLE" run \
   --project "$TRO_DOPPLER_PROJECT" \
-  --config "$TRO_DOPPLER_CONFIG" \
-  -- "$TRO_EXECUTABLE"
+  --config "$TRO_BACKEND_CONFIG" \
+  -- "$TRO_API_EXECUTABLE"
 attempt=0
-while ! /usr/bin/pgrep -f '^/Applications/Tro\.app/Contents/MacOS/desktop$' >/dev/null; do
+while ! /usr/bin/curl --fail --silent --max-time 1 "$TRO_HEALTH_URL" >/dev/null; do
   attempt=$((attempt + 1))
-  if [ "$attempt" -ge 50 ]; then
-    /bin/launchctl remove "$TRO_DEV_JOB" 2>/dev/null || true
-    printf '%s\n' "Tro did not start in time. See $TRO_DEV_LOG." >&2
+  if [ "$attempt" -ge 100 ]; then
+    /bin/launchctl remove "$TRO_API_JOB" 2>/dev/null || true
+    printf '%s\n' "Tro API did not start in time. See $TRO_API_LOG." >&2
     exit 1
   fi
   sleep 0.1
 done
 
-printf '%s\n' "Installed and started the Doppler-injected development build at $INSTALL_APP"
+/bin/launchctl submit \
+  -l "$TRO_DESKTOP_JOB" \
+  -o "$TRO_DESKTOP_LOG" \
+  -e "$TRO_DESKTOP_LOG" \
+  -- "$DOPPLER_EXECUTABLE" run \
+  --project "$TRO_DOPPLER_PROJECT" \
+  --config "$TRO_DESKTOP_CONFIG" \
+  -- "$TRO_EXECUTABLE"
+attempt=0
+while ! /usr/bin/pgrep -f '^/Applications/Tro\.app/Contents/MacOS/desktop$' >/dev/null; do
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 50 ]; then
+    /bin/launchctl remove "$TRO_DESKTOP_JOB" 2>/dev/null || true
+    /bin/launchctl remove "$TRO_API_JOB" 2>/dev/null || true
+    printf '%s\n' "Tro did not start in time. See $TRO_DESKTOP_LOG." >&2
+    exit 1
+  fi
+  sleep 0.1
+done
+
+printf '%s\n' "Installed Tro and started the isolated Doppler backend and desktop jobs."

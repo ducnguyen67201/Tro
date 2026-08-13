@@ -67,7 +67,7 @@ pub async fn register_device(
 }
 
 pub async fn authenticate(state: &AppState, bearer: &str) -> Result<Uuid, ApiError> {
-    let digest = token_hmac(state.config.device_token_hmac_key.expose(), bearer)?;
+    let digest = token_digest(state.config.device_token_hmac_key.expose(), bearer)?;
     state
         .repository
         .device_for_token(&digest)
@@ -84,8 +84,8 @@ pub async fn rotate_token(
     let mut bytes = [0_u8; 32];
     rand::rng().fill_bytes(&mut bytes);
     let token = URL_SAFE_NO_PAD.encode(bytes);
-    let old_digest = token_hmac(state.config.device_token_hmac_key.expose(), old_token)?;
-    let new_digest = token_hmac(state.config.device_token_hmac_key.expose(), &token)?;
+    let old_digest = token_digest(state.config.device_token_hmac_key.expose(), old_token)?;
+    let new_digest = token_digest(state.config.device_token_hmac_key.expose(), &token)?;
     let now = OffsetDateTime::now_utc();
     let expires_at = now + Duration::days(30);
     state
@@ -116,7 +116,7 @@ async fn issue_token(state: &AppState, device_id: Uuid) -> Result<DeviceTokenRes
     let mut bytes = [0_u8; 32];
     rand::rng().fill_bytes(&mut bytes);
     let token = URL_SAFE_NO_PAD.encode(bytes);
-    let digest = token_hmac(state.config.device_token_hmac_key.expose(), &token)?;
+    let digest = token_digest(state.config.device_token_hmac_key.expose(), &token)?;
     let expires_at = OffsetDateTime::now_utc() + Duration::days(30);
     state
         .repository
@@ -129,7 +129,7 @@ async fn issue_token(state: &AppState, device_id: Uuid) -> Result<DeviceTokenRes
     })
 }
 
-fn token_hmac(key: &str, token: &str) -> Result<String, ApiError> {
+pub fn token_digest(key: &str, token: &str) -> Result<String, ApiError> {
     let mut mac = HmacSha256::new_from_slice(key.as_bytes()).map_err(|_| ApiError::provider())?;
     mac.update(token.as_bytes());
     Ok(URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes()))

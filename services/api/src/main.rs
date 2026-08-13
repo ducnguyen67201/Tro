@@ -1,6 +1,10 @@
 use std::sync::Arc;
 
-use api::{AppConfig, AppState, OpenAiProvider, build_router, repositories::PgRepository};
+use api::{
+    AppConfig, AppState, OpenAiProvider, OpenRouterTutorProvider, Repository, build_router,
+    repositories::{MemoryRepository, PgRepository},
+    services::device_tokens,
+};
 use sqlx::postgres::PgPoolOptions;
 use tracing_subscriber::EnvFilter;
 
@@ -9,24 +13,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Arc::new(AppConfig::from_env()?);
     init_tracing(&config.log_format);
 
-    let pool = PgPoolOptions::new()
-        .max_connections(8)
-        .connect(&config.database_url)
-        .await?;
-    let migration_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
-    sqlx::migrate::Migrator::new(migration_path)
-        .await?
-        .run(&pool)
-        .await?;
-
-    let repository = Arc::new(PgRepository::new(pool));
+    let repository: Arc<dyn Repository> = if config.database_url == "memory://" {
+        let repository = Arc::new(MemoryRepository::default());
+        if let Some(token) = &config.development_device_token {
+            let digest =
+                device_tokens::token_digest(config.device_token_hmac_key.expose(), token.expose())
+                    .map_err(|_| std::io::Error::other("invalid development device token"))?;
+            repository.seed_device_token_digest(digest);
+        }
+        repository
+    } else {
+        let pool = PgPoolOptions::new()
+            .max_connections(8)
+            .connect(&config.database_url)
+            .await?;
+        let migration_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations");
+        sqlx::migrate::Migrator::new(migration_path)
+            .await?
+            .run(&pool)
+            .await?;
+        Arc::new(PgRepository::new(pool))
+    };
     let provider = Arc::new(OpenAiProvider::new(
-        config.openai_api_key.expose().to_owned(),
+        config
+            .openai_api_key
+            .as_ref()
+            .map_or_else(String::new, |key| key.expose().to_owned()),
         config.openai_realtime_model.clone(),
         config.openai_computer_model.clone(),
         config.openai_realtime_voice.clone(),
     ));
-    let state = AppState::new(config.clone(), repository, provider);
+    let tutor_provider = Arc::new(OpenRouterTutorProvider::new(&config));
+    let state = AppState::new(config.clone(), repository, provider, tutor_provider);
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
     tracing::info!(component = "api", operation = "listen", address = %config.bind_addr);
     axum::serve(listener, build_router(state)).await?;

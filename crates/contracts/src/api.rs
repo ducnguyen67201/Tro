@@ -47,6 +47,17 @@ pub struct RealtimeSecretResponse {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct TutorTurnMetadata {
+    pub locale: String,
+    pub frame: ScreenFrameMeta,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct TutorTurnResponse {
+    pub guidance: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct CreateAgentRunMetadata {
     pub goal: String,
     pub frame: ScreenFrameMeta,

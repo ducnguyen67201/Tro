@@ -1,4 +1,4 @@
-use api::{AppConfig, AppState, FakeProvider, MemoryRepository};
+use api::{AppConfig, AppState, FakeProvider, FakeTutorProvider, MemoryRepository};
 use contracts::{CreateAgentRunMetadata, ImageMime, ScreenFrameMeta};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -7,7 +7,12 @@ use uuid::Uuid;
 async fn run_stores_only_encrypted_continuation_metadata() {
     let repository = Arc::new(MemoryRepository::default());
     let provider = Arc::new(FakeProvider::default());
-    let state = AppState::new(Arc::new(AppConfig::test()), repository.clone(), provider);
+    let state = AppState::new(
+        Arc::new(AppConfig::test()),
+        repository.clone(),
+        provider,
+        Arc::new(FakeTutorProvider::default()),
+    );
     let device = Uuid::new_v4();
     let response = api::services::agent_loop::create(
         &state,

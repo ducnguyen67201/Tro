@@ -1,4 +1,4 @@
-use api::{AppConfig, AppState, FakeProvider, MemoryRepository};
+use api::{AppConfig, AppState, FakeProvider, FakeTutorProvider, MemoryRepository};
 use argon2::{Argon2, PasswordHasher, password_hash::SaltString};
 use contracts::RegisterDeviceRequest;
 use std::sync::Arc;
@@ -14,7 +14,12 @@ async fn invite_is_redeemed_and_token_is_opaque() {
         .expect("fixture hash")
         .to_string();
     repository.seed_invite_hash(hash, 1);
-    let state = AppState::new(config, repository, Arc::new(FakeProvider::default()));
+    let state = AppState::new(
+        config,
+        repository,
+        Arc::new(FakeProvider::default()),
+        Arc::new(FakeTutorProvider::default()),
+    );
     let token = api::services::device_tokens::register_device(
         &state,
         RegisterDeviceRequest {
