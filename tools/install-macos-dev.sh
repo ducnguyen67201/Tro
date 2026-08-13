@@ -16,6 +16,7 @@ TRO_DESKTOP_LOG="${TMPDIR:-/tmp}/tro-desktop-dev.log"
 TRO_API_LOG="${TMPDIR:-/tmp}/tro-api-dev.log"
 TRO_DESKTOP_JOB="vn.tro.desktop.doppler-dev"
 TRO_API_JOB="vn.tro.api.doppler-dev"
+TRO_DESKTOP_PLIST="${TMPDIR:-/tmp}/$TRO_DESKTOP_JOB.plist"
 TRO_DOPPLER_PROJECT="tro"
 TRO_BACKEND_CONFIG="dev"
 TRO_DESKTOP_CONFIG="dev_desktop"
@@ -97,26 +98,39 @@ while ! /usr/bin/curl --fail --silent --max-time 1 "$TRO_HEALTH_URL" >/dev/null;
   sleep 0.1
 done
 
-/bin/launchctl submit \
-  -l "$TRO_DESKTOP_JOB" \
-  -o "$TRO_DESKTOP_LOG" \
-  -e "$TRO_DESKTOP_LOG" \
-  -- "$DOPPLER_EXECUTABLE" run \
-  --project "$TRO_DOPPLER_PROJECT" \
-  --config "$TRO_DESKTOP_CONFIG" \
-  -- /usr/bin/env \
-  TRO_API_BASE_URL="$TRO_API_URL" \
-  "$TRO_EXECUTABLE"
+# A submitted launchctl job infers KeepAlive=true and makes Quit relaunch the
+# app. Use an explicit one-shot LaunchAgent so Tro starts once and stays off.
+/usr/bin/plutil -create xml1 "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert Label -string "$TRO_DESKTOP_JOB" "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments -array "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.0 -string "$DOPPLER_EXECUTABLE" "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.1 -string run "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.2 -string --project "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.3 -string "$TRO_DOPPLER_PROJECT" "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.4 -string --config "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.5 -string "$TRO_DESKTOP_CONFIG" "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.6 -string -- "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.7 -string /usr/bin/env "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.8 -string TRO_DEV_MANAGED_BACKEND=1 "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.9 -string "TRO_API_BASE_URL=$TRO_API_URL" "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.10 -string "$TRO_EXECUTABLE" "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert RunAtLoad -bool true "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert KeepAlive -bool false "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProcessType -string Interactive "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert StandardOutPath -string "$TRO_DESKTOP_LOG" "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert StandardErrorPath -string "$TRO_DESKTOP_LOG" "$TRO_DESKTOP_PLIST"
+/bin/launchctl bootstrap "gui/$(id -u)" "$TRO_DESKTOP_PLIST"
 attempt=0
 while ! /usr/bin/pgrep -f '^/Applications/Tro\.app/Contents/MacOS/desktop$' >/dev/null; do
   attempt=$((attempt + 1))
   if [ "$attempt" -ge 50 ]; then
     /bin/launchctl remove "$TRO_DESKTOP_JOB" 2>/dev/null || true
     /bin/launchctl remove "$TRO_API_JOB" 2>/dev/null || true
+    /usr/bin/pkill -f '^/Applications/Tro\.app/Contents/MacOS/desktop$' 2>/dev/null || true
     printf '%s\n' "Tro did not start in time. See $TRO_DESKTOP_LOG." >&2
     exit 1
   fi
   sleep 0.1
 done
 
-printf '%s\n' "Installed Tro and started the isolated Doppler backend and desktop jobs."
+printf '%s\n' "Installed Tro and started the stoppable desktop with its isolated backend."
