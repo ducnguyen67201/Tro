@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "pnpm --filter @tro/desktop tauri dev",
     "dev:web": "pnpm --filter @tro/desktop dev",
+    "install:mac": "sh tools/install-macos-dev.sh",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint apps/desktop/src apps/desktop/*.ts",

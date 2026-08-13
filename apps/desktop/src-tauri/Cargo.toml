@@ -37,7 +37,7 @@ zeroize.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 ghost-permissions = "=0.1.11"
-keytap = { version = "=0.4.0", default-features = false }
+objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["CGEventSource", "CGEventTypes", "CGRemoteOperation"] }
 
 [lints]
 workspace = true
