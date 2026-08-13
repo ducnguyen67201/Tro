@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: tro
+      POSTGRES_USER: tro
+      POSTGRES_PASSWORD: local-development-only
+    ports:
+      - "54329:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tro -d tro"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - tro-postgres:/var/lib/postgresql/data
+
+volumes:
+  tro-postgres:

@@ -1,0 +1,7 @@
+target
+node_modules
+dist
+Cargo.lock
+pnpm-lock.yaml
+evals/cases/*.jsonl
+apps/desktop/src-tauri/gen/

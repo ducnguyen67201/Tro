@@ -1,0 +1,6 @@
+{
+  "bundle": {
+    "targets": ["msi", "nsis"],
+    "windows": { "digestAlgorithm": "sha256", "timestampUrl": "" }
+  }
+}

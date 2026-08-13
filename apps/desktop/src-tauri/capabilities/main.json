@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Narrow permissions for the interactive Tro window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "global-shortcut:allow-is-registered",
+    "clipboard-manager:allow-write-text"
+  ]
+}

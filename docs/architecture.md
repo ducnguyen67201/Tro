@@ -1,0 +1,22 @@
+# Architecture
+
+Tro is a ports-and-adapters desktop product. React renders sanitized state; Rust owns assistant and agent state, permissions, native media, overlays, policy, cancellation, and input. The Axum broker protects provider credentials, validates invite-only devices, applies usage limits, and proposes—but never executes—computer actions.
+
+## Trust boundaries
+
+- Webview input is untrusted and enters Rust through narrow Tauri commands with length, enum, state, and origin checks. No shell or broad filesystem capability is exposed.
+- Network requests use a revocable opaque device token. The provider API key exists only in the API process.
+- Every pixel and every model action is untrusted. Screen content cannot alter consent, goal, policy, limits, or confirmation.
+- Logs and telemetry accept stable metadata only. Raw media, text, coordinates paired with window identity, secrets, and provider bodies are forbidden.
+
+## Desktop flow
+
+`Global shortcut → Assistant state → hide overlays → in-memory capture → cpal audio → Realtime adapter → sanitized transcript / overlay event`.
+
+Agent mode is separate: `explicit goal → capture → API action proposal → schema validation → ActionPolicy → allow / one-action confirmation / block → serialized InputBackend → new observation`. Emergency stop cancels the token, releases held inputs, clears overlays and confirmations, and never resumes after restart.
+
+## Conventions
+
+Rust libraries return typed errors and adapters do one capability. API code follows route → service → repository. Coordinators own cancellation and state. Provider types do not cross adapters. JSON and stable codes use `snake_case`; Rust/React types use `PascalCase`. Runtime paths do not use `unwrap`, `expect`, or `panic`. Test-only static invariants may use clear `expect` messages.
+
+Normalized screen coordinates are inclusive `0..=1`, finite, and converted to physical desktop pixels only by `CoordinateMapper`. Screen buffers and secret text redact debug output and zeroize on drop.

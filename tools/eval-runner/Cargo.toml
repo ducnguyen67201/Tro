@@ -1,0 +1,14 @@
+[package]
+name = "eval-runner"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+time.workspace = true
+
+[lints]
+workspace = true

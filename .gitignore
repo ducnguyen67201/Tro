@@ -1,0 +1,17 @@
+/target/
+node_modules/
+/apps/desktop/dist/
+/apps/desktop/src-tauri/target/
+/.env
+/.env.*
+!/.env.example
+/.DS_Store
+*.log
+*.tsbuildinfo
+.vite/
+*.pem
+*.p12
+*.pfx
+*.key
+/.sqlx/
+/.claude/PRPs/plans/
