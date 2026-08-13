@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { PermissionSnapshot } from "../../lib/contracts";
 import { desktop } from "../../lib/tauri";
@@ -9,20 +9,41 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState<"welcome" | "permissions">("welcome");
   const [invite, setInvite] = useState("");
   const [age, setAge] = useState(false);
+  const [requesting, setRequesting] = useState<keyof PermissionSnapshot | null>(
+    null,
+  );
   const [permissions, setPermissions] = useState<PermissionSnapshot>({
     microphone: "not_determined",
     screen_capture: "not_determined",
     input_control: "not_determined",
   });
 
-  useEffect(() => {
-    void desktop.permissions().then(setPermissions);
+  const refreshPermissions = useCallback(() => {
+    void desktop
+      .permissions()
+      .then(setPermissions)
+      .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    refreshPermissions();
+    window.addEventListener("focus", refreshPermissions);
+    document.addEventListener("visibilitychange", refreshPermissions);
+    return () => {
+      window.removeEventListener("focus", refreshPermissions);
+      document.removeEventListener("visibilitychange", refreshPermissions);
+    };
+  }, [refreshPermissions]);
+
   const request = (permission: keyof PermissionSnapshot) => {
+    setRequesting(permission);
     void desktop
       .requestPermission(permission)
-      .then(() => desktop.permissions())
-      .then(setPermissions);
+      .then(setPermissions)
+      .catch(refreshPermissions)
+      .finally(() => {
+        setRequesting(null);
+      });
   };
 
   if (step === "welcome") {
@@ -114,6 +135,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
           title={t("microphone")}
           detail="Nghe câu hỏi khi bạn giữ phím tắt"
           status={permissions.microphone}
+          requesting={requesting === "microphone"}
           onRequest={() => {
             request("microphone");
           }}
@@ -123,6 +145,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
           title={t("screen")}
           detail="Chụp đúng màn hình sau khi bạn yêu cầu"
           status={permissions.screen_capture}
+          requesting={requesting === "screen_capture"}
           onRequest={() => {
             request("screen_capture");
           }}
@@ -132,6 +155,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
           title={t("input")}
           detail="Chỉ cần cho dictation và agent có kiểm soát"
           status={permissions.input_control}
+          requesting={requesting === "input_control"}
           onRequest={() => {
             request("input_control");
           }}

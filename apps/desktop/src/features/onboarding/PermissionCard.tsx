@@ -5,12 +5,14 @@ export function PermissionCard({
   title,
   detail,
   status,
+  requesting,
   onRequest,
 }: {
   icon: string;
   title: string;
   detail: string;
   status: PermissionStatus;
+  requesting?: boolean;
   onRequest: () => void;
 }) {
   return (
@@ -25,8 +27,12 @@ export function PermissionCard({
       {status === "granted" ? (
         <span className="permission-ok">Đã cho phép</span>
       ) : (
-        <button className="button quiet" onClick={onRequest}>
-          Cho phép
+        <button
+          className="button quiet"
+          disabled={requesting}
+          onClick={onRequest}
+        >
+          {requesting ? "Đang mở…" : "Cho phép"}
         </button>
       )}
     </article>

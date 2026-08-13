@@ -1,5 +1,5 @@
 use crate::{app_state::AppState, platform};
-use contracts::{AppError, ErrorCode, PermissionSnapshot};
+use contracts::{AppError, PermissionSnapshot};
 use tauri::State;
 
 #[tauri::command]
@@ -8,13 +8,10 @@ pub fn get_permission_snapshot(state: State<'_, AppState>) -> PermissionSnapshot
 }
 
 #[tauri::command]
-pub fn request_permission(permission: String) -> Result<(), AppError> {
-    match permission.as_str() {
-        "microphone" | "screen_capture" | "input_control" => Ok(()),
-        _ => Err(AppError::new(
-            ErrorCode::InvalidRequest,
-            "Quyền được yêu cầu không hợp lệ.",
-            false,
-        )),
-    }
+pub fn request_permission(
+    permission: String,
+    state: State<'_, AppState>,
+) -> Result<PermissionSnapshot, AppError> {
+    platform::request_permission(&permission)?;
+    Ok(platform::permission_snapshot(state.audio.as_ref()))
 }

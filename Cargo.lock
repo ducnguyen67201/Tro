@@ -1260,6 +1260,7 @@ dependencies = [
  "async-trait",
  "blake3",
  "contracts",
+ "core-graphics",
  "cpal",
  "enigo",
  "image",

@@ -26,7 +26,7 @@ impl InputBackend for NativeInputBackend {
         if cancellation.is_cancelled() {
             return Err(cancelled());
         }
-        let mut enigo = Enigo::new(&Settings::default()).map_err(input_error)?;
+        let mut enigo = Enigo::new(&input_settings()).map_err(input_error)?;
         match action {
             ComputerAction::Move { point } => {
                 let point = CoordinateMapper::to_physical(*point, frame);
@@ -84,7 +84,7 @@ impl InputBackend for NativeInputBackend {
     }
 
     fn release_all(&self) -> Result<(), AppError> {
-        let mut enigo = Enigo::new(&Settings::default()).map_err(input_error)?;
+        let mut enigo = Enigo::new(&input_settings()).map_err(input_error)?;
         for button in [Button::Left, Button::Right, Button::Middle] {
             let _result = enigo.button(button, Direction::Release);
         }
@@ -97,6 +97,13 @@ impl InputBackend for NativeInputBackend {
             let _result = enigo.key(key, Direction::Release);
         }
         Ok(())
+    }
+}
+
+fn input_settings() -> Settings {
+    Settings {
+        open_prompt_to_get_permissions: false,
+        ..Settings::default()
     }
 }
 
@@ -119,4 +126,14 @@ fn input_error(error: impl std::fmt::Display) -> AppError {
 
 fn cancelled() -> AppError {
     AppError::new(ErrorCode::Cancelled, "Đã dừng theo yêu cầu.", false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::input_settings;
+
+    #[test]
+    fn input_actions_never_open_permission_prompt_implicitly() {
+        assert!(!input_settings().open_prompt_to_get_permissions);
+    }
 }

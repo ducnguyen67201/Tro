@@ -40,8 +40,10 @@ export const desktop = {
       : undefined,
   emergencyStop: async (): Promise<void> =>
     inTauri() ? invoke("emergency_stop") : undefined,
-  requestPermission: async (permission: string): Promise<void> =>
-    inTauri() ? invoke("request_permission", { permission }) : undefined,
+  requestPermission: async (permission: string): Promise<PermissionSnapshot> =>
+    inTauri()
+      ? invoke<PermissionSnapshot>("request_permission", { permission })
+      : desktop.permissions(),
   updateSettings: async (
     settings: Partial<AppSettings>,
   ): Promise<AppSettings> =>
