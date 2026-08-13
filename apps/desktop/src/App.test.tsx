@@ -206,7 +206,7 @@ describe("App background lifecycle", () => {
     expect(bridge.hideMainWindow).not.toHaveBeenCalled();
   });
 
-  test("waits for screen capture setup before finishing a quick key release", async () => {
+  test("stops the microphone immediately on a quick key release", async () => {
     localStorage.setItem("tro.onboarded", "true");
     let finishStart: (() => void) | undefined;
     bridge.startAssistant.mockReturnValueOnce(
@@ -221,14 +221,10 @@ describe("App background lifecycle", () => {
       bridge.shortcut?.("ask");
       bridge.shortcut?.("ask_release");
     });
-    expect(bridge.finishAssistant).not.toHaveBeenCalled();
-
-    act(() => {
-      finishStart?.();
-    });
     await waitFor(() => {
       expect(bridge.finishAssistant).toHaveBeenCalledOnce();
     });
+    expect(finishStart).toBeTypeOf("function");
   });
 
   test("finishes a hold only once when release events are duplicated", async () => {

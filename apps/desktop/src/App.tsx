@@ -19,7 +19,6 @@ export default function App() {
     let disposed = false;
     let pendingAsk:
       | {
-          start: Promise<void>;
           timeout: ReturnType<typeof window.setTimeout>;
           finished: boolean;
         }
@@ -41,9 +40,9 @@ export default function App() {
       current.finished = true;
       window.clearTimeout(current.timeout);
       pendingAsk = undefined;
-      void current.start.then(() =>
-        desktop.finishAssistant(reason).catch(() => undefined),
-      );
+      // Release closes the microphone immediately. Native code waits for any
+      // in-flight screenshot after the audio stream has already been dropped.
+      void desktop.finishAssistant(reason).catch(() => undefined);
     };
 
     void desktop
@@ -58,12 +57,10 @@ export default function App() {
           if (pendingAsk) return;
 
           const current = {
-            start: desktop
-              .startAssistant("command_option")
-              .catch(() => undefined),
             timeout: 0 as ReturnType<typeof window.setTimeout>,
             finished: false,
           };
+          void desktop.startAssistant("command_option").catch(() => undefined);
           current.timeout = window.setTimeout(() => {
             if (pendingAsk === current) {
               finishPendingAsk("command_option_timeout");

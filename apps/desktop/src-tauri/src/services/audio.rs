@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use contracts::{AppError, ErrorCode};
 use cpal::{
-    FromSample, Sample, SampleFormat, SizedSample, Stream, StreamConfig,
+    FromSample, InterfaceType, Sample, SampleFormat, SizedSample, Stream, StreamConfig,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 use zeroize::Zeroize;
@@ -41,14 +41,21 @@ struct ActiveRecording {
 
 impl AudioBackend for CpalAudioBackend {
     fn microphone_available(&self) -> bool {
-        cpal::default_host().default_input_device().is_some()
+        preferred_input_device().is_some()
     }
 
     fn start_push_to_talk(&self) -> Result<(), AppError> {
         self.stop();
-        let device = cpal::default_host()
-            .default_input_device()
-            .ok_or_else(microphone_unavailable)?;
+        let device = preferred_input_device().ok_or_else(microphone_unavailable)?;
+        let device_name = device
+            .description()
+            .map(|description| description.name().to_owned())
+            .unwrap_or_else(|_| "unknown".to_owned());
+        tracing::info!(
+            component = "audio",
+            operation = "push_to_talk_start",
+            device = %device_name
+        );
         let supported = device.default_input_config().map_err(microphone_error)?;
         let sample_rate = supported.sample_rate();
         let channels = supported.channels();
@@ -126,6 +133,21 @@ impl AudioBackend for CpalAudioBackend {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take();
     }
+}
+
+fn preferred_input_device() -> Option<cpal::Device> {
+    let host = cpal::default_host();
+    // Prefer the Mac's integrated microphone. Opening an AirPods/Bluetooth
+    // microphone forces its output into the low-bandwidth headset profile,
+    // which makes music sound distorted for the duration of recording.
+    let built_in = host.input_devices().ok().and_then(|mut devices| {
+        devices.find(|device| {
+            device
+                .description()
+                .is_ok_and(|description| description.interface_type() == InterfaceType::BuiltIn)
+        })
+    });
+    built_in.or_else(|| host.default_input_device())
 }
 
 fn build_input_stream<T>(

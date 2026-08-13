@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex, RwLock};
 
 use contracts::{AgentState, AssistantUiState, ScreenFrame};
+use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -25,6 +26,7 @@ pub struct AppState {
     pub capture: Arc<dyn CaptureBackend>,
     pub audio: Arc<dyn AudioBackend>,
     pub pending_frame: Mutex<Option<ScreenFrame>>,
+    pub frame_ready: Notify,
     pub llm: LlmGateway,
     pub computer_use: ComputerUseGateway,
     pub llm_config: RwLock<LlmConfig>,
@@ -46,6 +48,7 @@ impl AppState {
             capture: Arc::new(XcapCaptureBackend),
             audio: Arc::new(CpalAudioBackend::default()),
             pending_frame: Mutex::new(None),
+            frame_ready: Notify::new(),
             llm: LlmGateway::default(),
             computer_use: ComputerUseGateway::default(),
             llm_config: RwLock::new(LlmConfig::load()),

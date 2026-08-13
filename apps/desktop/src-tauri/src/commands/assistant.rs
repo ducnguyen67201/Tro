@@ -61,6 +61,7 @@ pub async fn start_assistant(
         .pending_frame
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(frame);
+    state.frame_ready.notify_waiters();
     let _transitioned = set_assistant_if_current(
         &app,
         &state,
@@ -96,26 +97,13 @@ pub async fn finish_assistant(
         Ok(audio) => audio,
         Err(error) => return fail_and_show(&app, &state, error),
     };
-    let mut frame = match state
-        .pending_frame
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .take()
-    {
-        Some(frame) => frame,
-        None => {
-            return fail_and_show(
-                &app,
-                &state,
-                AppError::new(
-                    contracts::ErrorCode::CaptureFailed,
-                    "Tro chưa có ảnh màn hình cho câu hỏi này. Hãy thử lại.",
-                    true,
-                ),
-            );
-        }
-    };
+    // Dropping the input stream above is the hard push-to-talk boundary. Screen
+    // capture may still be finishing, but the microphone is already closed.
     set_assistant(&app, &state, AssistantEvent::Heard, "Đang gửi đến LLM…")?;
+    let mut frame = match wait_for_pending_frame(&state).await {
+        Ok(frame) => frame,
+        Err(error) => return fail_and_show(&app, &state, error),
+    };
     let config = state
         .llm_config
         .read()
@@ -260,6 +248,7 @@ fn fail_and_show(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .take();
+    state.frame_ready.notify_waiters();
     let _failed = set_assistant(app, state, AssistantEvent::Fail, &error.message_vi);
     show_result_card(app, state);
     Err(error)
@@ -273,6 +262,53 @@ fn show_result_card(app: &AppHandle, state: &State<'_, AppState>) {
             error_code = "window_operation_failed",
             source = %error
         );
+    }
+}
+
+async fn wait_for_pending_frame(
+    state: &State<'_, AppState>,
+) -> Result<contracts::ScreenFrame, AppError> {
+    let cancellation = state.cancellation();
+    let wait = async {
+        loop {
+            let notified = state.frame_ready.notified();
+            if let Some(frame) = state
+                .pending_frame
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .take()
+            {
+                return Ok(frame);
+            }
+            if state
+                .snapshot
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .assistant
+                == AssistantState::Failed
+            {
+                return Err(AppError::new(
+                    contracts::ErrorCode::CaptureFailed,
+                    "Tro chưa thể chụp màn hình. Hãy thử lại.",
+                    true,
+                ));
+            }
+            notified.await;
+        }
+    };
+    tokio::select! {
+        () = cancellation.cancelled() => Err(AppError::new(
+            contracts::ErrorCode::Cancelled,
+            "Đã dừng theo yêu cầu.",
+            false,
+        )),
+        result = tokio::time::timeout(std::time::Duration::from_secs(3), wait) => {
+            result.map_err(|_| AppError::new(
+                contracts::ErrorCode::CaptureFailed,
+                "Tro chưa chụp xong màn hình. Hãy thử lại.",
+                true,
+            ))?
+        }
     }
 }
 
