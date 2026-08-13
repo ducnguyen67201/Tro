@@ -19,6 +19,12 @@ const browserSnapshot: AppSnapshot = {
   capture_active: false,
 };
 
+const isMacOS = () =>
+  typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent);
+
+export const defaultAskShortcut = () =>
+  isMacOS() ? "Command+Option" : "CommandOrControl+Shift+Space";
+
 export const desktop = {
   snapshot: async (): Promise<AppSnapshot> =>
     inTauri() ? invoke<AppSnapshot>("get_app_snapshot") : browserSnapshot,
@@ -30,10 +36,10 @@ export const desktop = {
           screen_capture: "not_determined",
           input_control: "not_determined",
         },
-  startAssistant: async (): Promise<void> =>
-    inTauri() ? invoke("start_assistant", { source: "ui" }) : undefined,
-  stopAssistant: async (): Promise<void> =>
-    inTauri() ? invoke("stop_assistant", { reason: "user" }) : undefined,
+  startAssistant: async (source = "ui"): Promise<void> =>
+    inTauri() ? invoke("start_assistant", { source }) : undefined,
+  stopAssistant: async (reason = "user"): Promise<void> =>
+    inTauri() ? invoke("stop_assistant", { reason }) : undefined,
   startAgent: async (goal: string): Promise<void> =>
     inTauri()
       ? invoke("start_agent", { goal, sourceFrameId: null })
@@ -51,7 +57,7 @@ export const desktop = {
       ? invoke<AppSettings>("update_settings", { patch: settings })
       : {
           locale: "vi",
-          ask_shortcut: "CommandOrControl+Shift+Space",
+          ask_shortcut: defaultAskShortcut(),
           dictation_shortcut: "CommandOrControl+Shift+D",
           stop_shortcut: "Escape",
           reduced_motion: false,
@@ -59,6 +65,8 @@ export const desktop = {
           optional_telemetry: false,
           ...settings,
         },
+  restart: async (): Promise<void> =>
+    inTauri() ? invoke("restart_app") : undefined,
   resolveConfirmation: async (
     confirmationId: string,
     decision: "allow_once" | "stop",
@@ -89,12 +97,15 @@ export const desktop = {
         })
       : Promise.resolve(() => undefined),
   onGlobalShortcut: (
-    handler: (action: "ask" | "dictation" | "stop") => void,
+    handler: (action: "ask" | "ask_release" | "dictation" | "stop") => void,
   ): Promise<UnlistenFn> =>
     inTauri()
-      ? listen<"ask" | "dictation" | "stop">("global_shortcut", (event) => {
-          handler(event.payload);
-        })
+      ? listen<"ask" | "ask_release" | "dictation" | "stop">(
+          "global_shortcut",
+          (event) => {
+            handler(event.payload);
+          },
+        )
       : Promise.resolve(() => undefined),
   onOpenSettings: (handler: () => void): Promise<UnlistenFn> =>
     inTauri()

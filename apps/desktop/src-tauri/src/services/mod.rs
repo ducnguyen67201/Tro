@@ -5,6 +5,8 @@ pub mod dictation;
 pub mod foreground;
 pub mod hotkeys;
 pub mod input;
+#[cfg(target_os = "macos")]
+pub mod modifier_shortcut;
 pub mod overlay;
 pub mod realtime;
 pub mod secrets;

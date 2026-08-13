@@ -15,10 +15,21 @@ export function ShortcutEditor({
         <input
           id="ask-shortcut"
           value={settings.ask_shortcut}
+          readOnly={settings.ask_shortcut === "Command+Option"}
+          aria-describedby={
+            settings.ask_shortcut === "Command+Option"
+              ? "ask-shortcut-help"
+              : undefined
+          }
           onChange={(event) => {
             onChange({ ask_shortcut: event.target.value });
           }}
         />
+        {settings.ask_shortcut === "Command+Option" ? (
+          <small id="ask-shortcut-help">
+            Giữ ⌘ + ⌥ để nói, thả phím để dừng.
+          </small>
+        ) : null}
       </div>
       <div className="settings-row">
         <label htmlFor="dictation-shortcut">Đọc chính tả</label>

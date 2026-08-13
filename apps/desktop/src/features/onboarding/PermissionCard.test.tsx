@@ -33,4 +33,18 @@ describe("PermissionCard", () => {
 
     expect(screen.getByRole("button", { name: "Đang mở…" })).toBeDisabled();
   });
+
+  test("offers to relaunch after macOS grants a restart-bound permission", () => {
+    render(
+      <PermissionCard
+        icon="↖"
+        title="Phím tắt & điều khiển"
+        detail="Nhận phím tắt toàn cục"
+        status="restart_required"
+        onRequest={() => undefined}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Mở lại Tro" })).toBeEnabled();
+  });
 });

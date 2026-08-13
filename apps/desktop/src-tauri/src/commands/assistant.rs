@@ -20,7 +20,7 @@ pub async fn start_assistant(
     if source.len() > 32 {
         return Err(internal("Nguồn yêu cầu không hợp lệ."));
     }
-    let _token = state.reset_cancellation();
+    let token = state.reset_cancellation();
     set_assistant(&app, &state, AssistantEvent::Start, "Đang nhìn màn hình…")?;
     overlay::hide_all(&app);
     tokio::time::sleep(std::time::Duration::from_millis(34)).await;
@@ -30,6 +30,9 @@ pub async fn start_assistant(
         .map_err(|_| internal("Không thể hoàn tất tác vụ chụp màn hình."))??;
     drop(frame);
     overlay::show_all(&app);
+    if token.is_cancelled() {
+        return Ok(());
+    }
     state.audio.start_push_to_talk()?;
     set_assistant(&app, &state, AssistantEvent::Captured, "Đang nghe…")
 }

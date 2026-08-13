@@ -23,7 +23,9 @@ export default function App() {
     void desktop.onSnapshot(setSnapshot);
     void desktop.onConfirmation(setConfirmation);
     void desktop.onGlobalShortcut((action) => {
-      if (action === "ask") void desktop.startAssistant();
+      if (action === "ask") void desktop.startAssistant("command_option");
+      if (action === "ask_release")
+        void desktop.stopAssistant("command_option_released");
       if (action === "dictation") void desktop.startAssistant();
       if (action === "stop") void desktop.emergencyStop();
     });
@@ -78,9 +80,8 @@ export default function App() {
         </h1>
         <p>
           Giữ <kbd>⌘</kbd>
-          <kbd>⇧</kbd>
-          <kbd>Space</kbd> rồi nói. Tro sẽ nhìn đúng màn hình hiện tại và hướng
-          dẫn thay vì làm hộ.
+          <kbd>⌥</kbd> rồi nói. Thả phím để dừng. Tro sẽ nhìn đúng màn hình hiện
+          tại và hướng dẫn thay vì làm hộ.
         </p>
       </section>
       <AssistantBar />
@@ -90,7 +91,7 @@ export default function App() {
           <span className="mode-icon lilac">?</span>
           <h2>Hỏi về màn hình</h2>
           <p>Giải thích bài toán, đoạn văn hoặc giao diện đang mở.</p>
-          <small>⌘ ⇧ Space</small>
+          <small>Giữ ⌘ ⌥</small>
         </article>
         <article>
           <span className="mode-icon mint">Aa</span>

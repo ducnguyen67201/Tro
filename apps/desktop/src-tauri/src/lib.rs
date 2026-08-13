@@ -5,7 +5,7 @@ pub mod platform;
 pub mod security;
 pub mod services;
 
-use tauri::Emitter;
+use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
 use app_state::AppState;
@@ -19,8 +19,11 @@ pub fn run() {
             register_shortcuts(app)?;
             services::hotkeys::build_tray(app)?;
             services::overlay::create_overlays(app.handle())?;
-            use tauri::Manager;
             app.state::<AppState>().reset_after_restart();
+            #[cfg(target_os = "macos")]
+            app.state::<AppState>()
+                .command_option_shortcut
+                .ensure_started(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -34,6 +37,7 @@ pub fn run() {
             commands::agent::emergency_stop,
             commands::permissions::get_permission_snapshot,
             commands::permissions::request_permission,
+            commands::permissions::restart_app,
             commands::settings::update_settings,
         ])
         .run(tauri::generate_context!())
@@ -43,6 +47,12 @@ pub fn run() {
 }
 
 fn register_shortcuts(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "macos")]
+    let shortcuts = [
+        ("CommandOrControl+Shift+D", "dictation"),
+        ("CommandOrControl+Shift+Escape", "stop"),
+    ];
+    #[cfg(not(target_os = "macos"))]
     let shortcuts = [
         ("CommandOrControl+Shift+Space", "ask"),
         ("CommandOrControl+Shift+D", "dictation"),

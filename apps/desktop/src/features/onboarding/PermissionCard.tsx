@@ -32,7 +32,11 @@ export function PermissionCard({
           disabled={requesting}
           onClick={onRequest}
         >
-          {requesting ? "Đang mở…" : "Cho phép"}
+          {requesting
+            ? "Đang mở…"
+            : status === "restart_required"
+              ? "Mở lại Tro"
+              : "Cho phép"}
         </button>
       )}
     </article>

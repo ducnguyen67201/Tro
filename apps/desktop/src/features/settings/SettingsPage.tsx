@@ -1,12 +1,12 @@
 import { useState } from "react";
 import type { AppSettings } from "../../lib/contracts";
-import { desktop } from "../../lib/tauri";
+import { defaultAskShortcut, desktop } from "../../lib/tauri";
 import { PrivacyPanel } from "./PrivacyPanel";
 import { ShortcutEditor } from "./ShortcutEditor";
 
 const initial: AppSettings = {
   locale: "vi",
-  ask_shortcut: "CommandOrControl+Shift+Space",
+  ask_shortcut: defaultAskShortcut(),
   dictation_shortcut: "CommandOrControl+Shift+D",
   stop_shortcut: "Escape",
   reduced_motion: false,

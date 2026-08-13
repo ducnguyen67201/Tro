@@ -1,18 +1,18 @@
 use contracts::{AppError, ErrorCode, PermissionSnapshot, PermissionStatus};
-use core_graphics::access::ScreenCaptureAccess;
-use enigo::{Enigo, Settings};
+use ghost_permissions::{Capability, granted, request};
 
 use crate::services::audio::AudioBackend;
 
 pub fn permission_snapshot(audio: &dyn AudioBackend) -> PermissionSnapshot {
     PermissionSnapshot {
         microphone: microphone_status(audio),
-        screen_capture: if ScreenCaptureAccess.preflight() {
+        screen_capture: if granted(Capability::ScreenRecording) {
             PermissionStatus::Granted
         } else {
             PermissionStatus::NotDetermined
         },
-        input_control: if accessibility_granted(false) {
+        input_control: if granted(Capability::Accessibility) && granted(Capability::InputMonitoring)
+        {
             PermissionStatus::Granted
         } else {
             PermissionStatus::NotDetermined
@@ -24,11 +24,12 @@ pub fn request_permission(permission: &str) -> Result<(), AppError> {
     match permission {
         "microphone" => Ok(()),
         "screen_capture" => {
-            ScreenCaptureAccess.request();
+            request(Capability::ScreenRecording);
             Ok(())
         }
         "input_control" => {
-            accessibility_granted(true);
+            request(Capability::InputMonitoring);
+            request(Capability::Accessibility);
             Ok(())
         }
         _ => Err(invalid_permission()),
@@ -41,15 +42,6 @@ fn microphone_status(audio: &dyn AudioBackend) -> PermissionStatus {
     } else {
         PermissionStatus::Unavailable
     }
-}
-
-fn accessibility_granted(prompt: bool) -> bool {
-    let settings = Settings {
-        open_prompt_to_get_permissions: prompt,
-        release_keys_when_dropped: false,
-        ..Settings::default()
-    };
-    Enigo::new(&settings).is_ok()
 }
 
 fn invalid_permission() -> AppError {

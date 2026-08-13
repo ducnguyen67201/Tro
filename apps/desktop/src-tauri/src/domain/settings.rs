@@ -15,13 +15,21 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             locale: "vi".to_owned(),
-            ask_shortcut: "CommandOrControl+Shift+Space".to_owned(),
+            ask_shortcut: default_ask_shortcut().to_owned(),
             dictation_shortcut: "CommandOrControl+Shift+D".to_owned(),
             stop_shortcut: "CommandOrControl+Shift+Escape".to_owned(),
             reduced_motion: false,
             dictation_preview: true,
             optional_telemetry: false,
         }
+    }
+}
+
+const fn default_ask_shortcut() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "Command+Option"
+    } else {
+        "CommandOrControl+Shift+Space"
     }
 }
 

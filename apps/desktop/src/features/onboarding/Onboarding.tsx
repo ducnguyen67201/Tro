@@ -36,6 +36,10 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
   }, [refreshPermissions]);
 
   const request = (permission: keyof PermissionSnapshot) => {
+    if (permissions[permission] === "restart_required") {
+      void desktop.restart();
+      return;
+    }
     setRequesting(permission);
     void desktop
       .requestPermission(permission)
@@ -152,8 +156,8 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
         />
         <PermissionCard
           icon="↖"
-          title={t("input")}
-          detail="Chỉ cần cho dictation và agent có kiểm soát"
+          title="Phím tắt & điều khiển"
+          detail="Nhận ⌘ + ⌥ và cho agent thao tác sau khi bạn xác nhận"
           status={permissions.input_control}
           requesting={requesting === "input_control"}
           onRequest={() => {

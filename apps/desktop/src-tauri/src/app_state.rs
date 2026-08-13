@@ -3,6 +3,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use contracts::{AgentState, AssistantUiState};
 use tokio_util::sync::CancellationToken;
 
+#[cfg(target_os = "macos")]
+use crate::services::modifier_shortcut::CommandOptionShortcut;
 use crate::{
     domain::{confirmation::ConfirmationManager, settings::AppSettings},
     services::{
@@ -21,6 +23,8 @@ pub struct AppState {
     pub input: Arc<dyn InputBackend>,
     pub foreground: Arc<dyn ForegroundContextBackend>,
     pub confirmation: Mutex<ConfirmationManager>,
+    #[cfg(target_os = "macos")]
+    pub command_option_shortcut: CommandOptionShortcut,
     cancellation: RwLock<CancellationToken>,
 }
 
@@ -34,6 +38,8 @@ impl AppState {
             input: Arc::new(NativeInputBackend),
             foreground: Arc::new(PlatformForegroundBackend),
             confirmation: Mutex::new(ConfirmationManager::default()),
+            #[cfg(target_os = "macos")]
+            command_option_shortcut: CommandOptionShortcut::default(),
             cancellation: RwLock::new(CancellationToken::new()),
         }
     }
