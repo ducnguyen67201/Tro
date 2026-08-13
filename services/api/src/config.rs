@@ -40,6 +40,7 @@ pub struct AppConfig {
     pub openrouter_api_key: SecretValue,
     pub openrouter_base_url: String,
     pub openrouter_model: String,
+    pub openrouter_computer_model: String,
     pub tutor_timeout_seconds: u64,
     pub tutor_audio_max_bytes: usize,
     pub tutor_enabled: bool,
@@ -72,6 +73,10 @@ impl AppConfig {
             openrouter_api_key: secret("OPENROUTER_API_KEY")?,
             openrouter_base_url: optional("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
             openrouter_model: optional("OPENROUTER_MODEL", "google/gemini-2.5-flash"),
+            openrouter_computer_model: optional(
+                "OPENROUTER_COMPUTER_MODEL",
+                "google/gemini-2.5-flash",
+            ),
             tutor_timeout_seconds: parsed("TUTOR_TIMEOUT_SECONDS", "20")?,
             tutor_audio_max_bytes: parsed("TUTOR_AUDIO_MAX_BYTES", "3145728")?,
             tutor_enabled: parsed("TUTOR_ENABLED", "true")?,
@@ -106,6 +111,7 @@ impl AppConfig {
             openrouter_api_key: SecretValue("test-openrouter-provider-key".to_owned()),
             openrouter_base_url: "https://openrouter.ai/api/v1".to_owned(),
             openrouter_model: "test/provider-model".to_owned(),
+            openrouter_computer_model: "test/computer-model".to_owned(),
             tutor_timeout_seconds: 20,
             tutor_audio_max_bytes: 3_145_728,
             tutor_enabled: true,
@@ -129,7 +135,7 @@ impl AppConfig {
     }
 
     fn validate(&self) -> Result<(), ConfigError> {
-        if (self.agent_enabled || self.realtime_enabled) && self.openai_api_key.is_none() {
+        if self.realtime_enabled && self.openai_api_key.is_none() {
             return Err(ConfigError::Missing("OPENAI_API_KEY"));
         }
         let base_url = url::Url::parse(&self.openrouter_base_url)
@@ -145,11 +151,7 @@ impl AppConfig {
         {
             return Err(ConfigError::Invalid("OPENROUTER_BASE_URL"));
         }
-        if self.openrouter_model.len() < 3
-            || self.openrouter_model.len() > 120
-            || self.openrouter_model.chars().any(char::is_whitespace)
-            || !self.openrouter_model.contains('/')
-        {
+        if !valid_model(&self.openrouter_model) || !valid_model(&self.openrouter_computer_model) {
             return Err(ConfigError::Invalid("OPENROUTER_MODEL"));
         }
         if !(5..=60).contains(&self.tutor_timeout_seconds)
@@ -182,6 +184,12 @@ impl AppConfig {
         }
         Ok(())
     }
+}
+
+fn valid_model(model: &str) -> bool {
+    (3..=120).contains(&model.len())
+        && !model.chars().any(char::is_whitespace)
+        && model.contains('/')
 }
 
 fn required(name: &'static str) -> Result<String, ConfigError> {

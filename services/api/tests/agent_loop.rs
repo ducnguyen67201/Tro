@@ -1,5 +1,8 @@
 use api::{AppConfig, AppState, FakeProvider, FakeTutorProvider, MemoryRepository};
-use contracts::{CreateAgentRunMetadata, ImageMime, ScreenFrameMeta};
+use contracts::{
+    ActionTarget, ComputerAction, CreateAgentRunMetadata, ImageMime, PlannedComputerAction,
+    ScreenFrameMeta,
+};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -7,6 +10,15 @@ use uuid::Uuid;
 async fn run_stores_only_encrypted_continuation_metadata() {
     let repository = Arc::new(MemoryRepository::default());
     let provider = Arc::new(FakeProvider::default());
+    provider
+        .actions
+        .lock()
+        .expect("fake provider mutex")
+        .push(PlannedComputerAction {
+            action: ComputerAction::Capture,
+            target: ActionTarget::Benign,
+            description_vi: "Chụp lại màn hình".to_owned(),
+        });
     let state = AppState::new(
         Arc::new(AppConfig::test()),
         repository.clone(),

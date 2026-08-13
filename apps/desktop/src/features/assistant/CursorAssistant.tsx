@@ -39,6 +39,20 @@ const cursorFeedback: Record<AppSnapshot["assistant"], CursorFeedback> = {
   failed: "failed",
 };
 
+function feedbackFor(snapshot: AppSnapshot): CursorFeedback {
+  if (snapshot.agent === "failed") return "failed";
+  if (snapshot.agent === "completed") return "responding";
+  if (
+    snapshot.agent === "planning" ||
+    snapshot.agent === "awaiting_confirmation" ||
+    snapshot.agent === "executing" ||
+    snapshot.agent === "observing"
+  ) {
+    return "processing";
+  }
+  return cursorFeedback[snapshot.assistant];
+}
+
 export function CursorAssistant() {
   const [phase, setPhase] = useState<CursorCompanionPhase>("following");
   const [snapshot, setSnapshot] = useState(initialSnapshot);
@@ -91,7 +105,7 @@ export function CursorAssistant() {
   if (phase === "hidden") return null;
 
   if (phase === "following" || phase === "acting") {
-    const feedback = cursorFeedback[snapshot.assistant];
+    const feedback = feedbackFor(snapshot);
     return (
       <div
         className={`cursor-following is-${feedback}${phase === "acting" ? " is-acting" : ""}`}

@@ -1,5 +1,5 @@
-use contracts::{ComputerAction, ForegroundContext, NormalizedPoint, RiskTier};
-use desktop_lib::security::action_policy::{ActionContext, ActionPolicy, TargetHint};
+use contracts::{ActionTarget, ComputerAction, ForegroundContext, NormalizedPoint, RiskTier};
+use desktop_lib::security::action_policy::{ActionContext, ActionPolicy};
 
 fn foreground() -> ForegroundContext {
     ForegroundContext {
@@ -22,7 +22,7 @@ fn payment_is_blocked_before_input() {
             explicit_session: true,
             goal_matches: true,
             foreground: &foreground,
-            target: TargetHint::Payment,
+            target: ActionTarget::Payment,
         },
     );
     assert_eq!(decision.tier, RiskTier::Blocked);
@@ -37,7 +37,7 @@ fn unknown_field_requires_confirmation() {
             explicit_session: true,
             goal_matches: true,
             foreground: &foreground,
-            target: TargetHint::UnknownField,
+            target: ActionTarget::UnknownField,
         },
     );
     assert_eq!(decision.tier, RiskTier::Confirm);

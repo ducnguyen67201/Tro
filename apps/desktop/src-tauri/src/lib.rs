@@ -34,6 +34,7 @@ pub fn run() {
             register_shortcuts(app)?;
             services::hotkeys::build_tray(app)?;
             services::cursor_companion::CursorCompanion::create_window(app.handle())?;
+            commands::agent::create_confirmation_window(app.handle())?;
             services::overlay::create_overlays(app.handle())?;
             let state = app.state::<AppState>();
             state.reset_after_restart();

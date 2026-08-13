@@ -1,35 +1,13 @@
 use contracts::{
-    ComputerAction, ForegroundContext, KeyCode, PolicyDecision, PolicyReason, RiskTier,
+    ActionTarget, ComputerAction, ForegroundContext, KeyCode, PolicyDecision, PolicyReason,
+    RiskTier,
 };
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TargetHint {
-    Benign,
-    KnownEditor,
-    UnknownField,
-    Submit,
-    Upload,
-    Delete,
-    Download,
-    Settings,
-    ExternalNavigation,
-    PersonalData,
-    Password,
-    Otp,
-    Payment,
-    Banking,
-    Legal,
-    Medical,
-    Government,
-    ProctoredAssessment,
-    PermissionOrSecurity,
-}
 
 pub struct ActionContext<'a> {
     pub explicit_session: bool,
     pub goal_matches: bool,
     pub foreground: &'a ForegroundContext,
-    pub target: TargetHint,
+    pub target: ActionTarget,
 }
 
 pub struct ActionPolicy;
@@ -54,47 +32,47 @@ impl ActionPolicy {
             );
         }
         match context.target {
-            TargetHint::Password | TargetHint::Otp => {
+            ActionTarget::Password | ActionTarget::Otp => {
                 return blocked(
                     PolicyReason::Credentials,
                     "Mật khẩu và mã xác thực luôn bị chặn.",
                 );
             }
-            TargetHint::Payment | TargetHint::Banking => {
+            ActionTarget::Payment | ActionTarget::Banking => {
                 return blocked(
                     PolicyReason::Payment,
                     "Tro không thực hiện thanh toán hoặc giao dịch tài chính.",
                 );
             }
-            TargetHint::ProctoredAssessment => {
+            ActionTarget::ProctoredAssessment => {
                 return blocked(
                     PolicyReason::ProctoredAssessment,
                     "Tro không thao tác trong bài thi có giám sát.",
                 );
             }
-            TargetHint::PermissionOrSecurity
-            | TargetHint::Government
-            | TargetHint::Legal
-            | TargetHint::Medical => {
+            ActionTarget::PermissionOrSecurity
+            | ActionTarget::Government
+            | ActionTarget::Legal
+            | ActionTarget::Medical => {
                 return blocked(
                     PolicyReason::SafeguardChange,
                     "Thao tác nhạy cảm này cần bạn tự thực hiện.",
                 );
             }
-            TargetHint::Submit
-            | TargetHint::Upload
-            | TargetHint::Delete
-            | TargetHint::Download
-            | TargetHint::Settings
-            | TargetHint::ExternalNavigation
-            | TargetHint::PersonalData
-            | TargetHint::UnknownField => {
+            ActionTarget::Submit
+            | ActionTarget::Upload
+            | ActionTarget::Delete
+            | ActionTarget::Download
+            | ActionTarget::Settings
+            | ActionTarget::ExternalNavigation
+            | ActionTarget::PersonalData
+            | ActionTarget::UnknownField => {
                 return confirm(
                     PolicyReason::ConsequentialAction,
                     "Tro cần bạn xác nhận đúng một thao tác này.",
                 );
             }
-            TargetHint::Benign | TargetHint::KnownEditor => {}
+            ActionTarget::Benign | ActionTarget::KnownEditor => {}
         }
         if let ComputerAction::KeyPress { keys } = action
             && keys.iter().any(|key| matches!(key, KeyCode::Enter))
@@ -105,7 +83,7 @@ impl ActionPolicy {
             );
         }
         if let ComputerAction::TypeText { .. } = action
-            && context.target != TargetHint::KnownEditor
+            && context.target != ActionTarget::KnownEditor
         {
             return confirm(
                 PolicyReason::UnknownField,
@@ -114,7 +92,7 @@ impl ActionPolicy {
         }
         PolicyDecision {
             tier: RiskTier::Low,
-            reason_code: if context.target == TargetHint::KnownEditor {
+            reason_code: if context.target == ActionTarget::KnownEditor {
                 PolicyReason::KnownEditor
             } else {
                 PolicyReason::BenignNavigation

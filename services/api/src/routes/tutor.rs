@@ -42,7 +42,7 @@ pub async fn turn(
             ),
         });
     }
-    let guidance = state
+    let completion = state
         .tutor_provider
         .complete(TutorMedia {
             audio_wav: std::mem::take(&mut *audio),
@@ -50,7 +50,10 @@ pub async fn turn(
         })
         .await?;
     Ok(Json(ApiEnvelope {
-        data: TutorTurnResponse { guidance },
+        data: TutorTurnResponse {
+            guidance: completion.guidance,
+            computer_goal: completion.computer_goal,
+        },
         request_id: format!("req_{}", Uuid::new_v4().simple()),
     }))
 }

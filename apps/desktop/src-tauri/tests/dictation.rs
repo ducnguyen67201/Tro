@@ -1,5 +1,4 @@
-use contracts::ForegroundContext;
-use desktop_lib::security::action_policy::TargetHint;
+use contracts::{ActionTarget, ForegroundContext};
 
 #[test]
 fn secure_context_is_never_treated_as_known_editor() {
@@ -10,6 +9,6 @@ fn secure_context_is_never_treated_as_known_editor() {
         is_secure: true,
         is_elevated: false,
     };
-    let _known_editor = TargetHint::KnownEditor;
+    let _known_editor = ActionTarget::KnownEditor;
     assert!(context.is_secure);
 }

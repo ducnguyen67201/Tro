@@ -5,8 +5,9 @@ pub mod error;
 pub mod overlay;
 
 pub use action::{
-    ActionReceipt, ComputerAction, ForegroundContext, KeyCode, MouseButton, NormalizedPoint,
-    NormalizedRect, PolicyDecision, PolicyReason, RiskTier, SecretText,
+    ActionOutcome, ActionReceipt, ActionTarget, ComputerAction, ForegroundContext, KeyCode,
+    MouseButton, NormalizedPoint, NormalizedRect, PlannedComputerAction, PolicyDecision,
+    PolicyReason, RiskTier, SecretText,
 };
 pub use api::*;
 pub use assistant::*;

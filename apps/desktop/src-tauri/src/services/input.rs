@@ -1,5 +1,5 @@
 use contracts::{
-    AppError, ComputerAction, CoordinateMapper, ErrorCode, MouseButton, ScreenFrameMeta,
+    AppError, ComputerAction, CoordinateMapper, ErrorCode, KeyCode, MouseButton, ScreenFrameMeta,
 };
 use enigo::{Button, Coordinate, Direction, Enigo, Keyboard, Mouse, Settings};
 use tokio_util::sync::CancellationToken;
@@ -71,14 +71,29 @@ impl InputBackend for NativeInputBackend {
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
             }
-            ComputerAction::Capture => {}
-            ComputerAction::Drag { .. } | ComputerAction::KeyPress { .. } => {
-                return Err(AppError::new(
-                    ErrorCode::UnsupportedAction,
-                    "Thao tác nhập này chưa được hỗ trợ an toàn.",
-                    false,
-                ));
+            ComputerAction::Drag { from, to } => {
+                let from = CoordinateMapper::to_physical(*from, frame);
+                let to = CoordinateMapper::to_physical(*to, frame);
+                enigo
+                    .move_mouse(from.x, from.y, Coordinate::Abs)
+                    .and_then(|()| enigo.button(Button::Left, Direction::Press))
+                    .and_then(|()| enigo.move_mouse(to.x, to.y, Coordinate::Abs))
+                    .and_then(|()| enigo.button(Button::Left, Direction::Release))
+                    .map_err(input_error)?;
             }
+            ComputerAction::KeyPress { keys } => {
+                let mapped = keys.iter().map(map_key).collect::<Result<Vec<_>, _>>()?;
+                for key in &mapped {
+                    if cancellation.is_cancelled() {
+                        return Err(cancelled());
+                    }
+                    enigo.key(*key, Direction::Press).map_err(input_error)?;
+                }
+                for key in mapped.iter().rev() {
+                    enigo.key(*key, Direction::Release).map_err(input_error)?;
+                }
+            }
+            ComputerAction::Capture => {}
         }
         Ok(())
     }
@@ -113,6 +128,39 @@ fn map_button(button: MouseButton) -> Button {
         MouseButton::Right => Button::Right,
         MouseButton::Middle => Button::Middle,
     }
+}
+
+fn map_key(key: &KeyCode) -> Result<enigo::Key, AppError> {
+    Ok(match key {
+        KeyCode::Enter => enigo::Key::Return,
+        KeyCode::Escape => enigo::Key::Escape,
+        KeyCode::Tab => enigo::Key::Tab,
+        KeyCode::Backspace => enigo::Key::Backspace,
+        KeyCode::ArrowUp => enigo::Key::UpArrow,
+        KeyCode::ArrowDown => enigo::Key::DownArrow,
+        KeyCode::ArrowLeft => enigo::Key::LeftArrow,
+        KeyCode::ArrowRight => enigo::Key::RightArrow,
+        KeyCode::Control => enigo::Key::Control,
+        KeyCode::Alt => enigo::Key::Alt,
+        KeyCode::Shift => enigo::Key::Shift,
+        KeyCode::Meta => enigo::Key::Meta,
+        KeyCode::Character(value) => {
+            let mut characters = value.chars();
+            let character = characters.next().ok_or_else(unsupported_key)?;
+            if characters.next().is_some() {
+                return Err(unsupported_key());
+            }
+            enigo::Key::Unicode(character)
+        }
+    })
+}
+
+fn unsupported_key() -> AppError {
+    AppError::new(
+        ErrorCode::UnsupportedAction,
+        "Tổ hợp phím computer use chưa được hỗ trợ.",
+        false,
+    )
 }
 
 fn input_error(error: impl std::fmt::Display) -> AppError {

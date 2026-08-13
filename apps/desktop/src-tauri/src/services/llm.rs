@@ -89,6 +89,12 @@ pub struct LlmTurnInput {
     pub frame: ScreenFrameMeta,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LlmTurnOutput {
+    pub guidance: String,
+    pub computer_goal: Option<String>,
+}
+
 impl Drop for LlmTurnInput {
     fn drop(&mut self) {
         self.audio_wav.zeroize();
@@ -98,7 +104,11 @@ impl Drop for LlmTurnInput {
 
 #[async_trait]
 pub trait LlmProvider: Send + Sync {
-    async fn complete(&self, config: &LlmConfig, input: LlmTurnInput) -> Result<String, AppError>;
+    async fn complete(
+        &self,
+        config: &LlmConfig,
+        input: LlmTurnInput,
+    ) -> Result<LlmTurnOutput, AppError>;
 }
 
 pub struct LlmGateway {
@@ -123,7 +133,7 @@ impl LlmGateway {
         &self,
         config: &LlmConfig,
         input: LlmTurnInput,
-    ) -> Result<String, AppError> {
+    ) -> Result<LlmTurnOutput, AppError> {
         tokio::time::timeout(
             Duration::from_secs(config.timeout_seconds),
             self.provider.complete(config, input),
@@ -160,7 +170,7 @@ impl LlmProvider for TroBackendProvider {
         &self,
         config: &LlmConfig,
         mut input: LlmTurnInput,
-    ) -> Result<String, AppError> {
+    ) -> Result<LlmTurnOutput, AppError> {
         let token = secrets::load_device_token()?.ok_or_else(|| {
             AppError::new(
                 ErrorCode::AuthExpired,
@@ -225,7 +235,15 @@ impl LlmProvider for TroBackendProvider {
         if guidance.is_empty() || guidance.len() > 12_000 {
             return Err(protocol_error());
         }
-        Ok(guidance.to_owned())
+        let computer_goal = envelope
+            .data
+            .computer_goal
+            .map(|goal| goal.trim().to_owned())
+            .filter(|goal| (3..=500).contains(&goal.len()));
+        Ok(LlmTurnOutput {
+            guidance: guidance.to_owned(),
+            computer_goal,
+        })
     }
 }
 
@@ -286,7 +304,7 @@ mod tests {
     use async_trait::async_trait;
     use contracts::{AppError, ErrorCode, ImageMime, ScreenFrameMeta};
 
-    use super::{LlmConfig, LlmGateway, LlmProvider, LlmTurnInput};
+    use super::{LlmConfig, LlmGateway, LlmProvider, LlmTurnInput, LlmTurnOutput};
 
     struct SlowProvider;
 
@@ -296,9 +314,12 @@ mod tests {
             &self,
             _config: &LlmConfig,
             _input: LlmTurnInput,
-        ) -> Result<String, AppError> {
+        ) -> Result<LlmTurnOutput, AppError> {
             tokio::time::sleep(Duration::from_millis(50)).await;
-            Ok("late".to_owned())
+            Ok(LlmTurnOutput {
+                guidance: "late".to_owned(),
+                computer_goal: None,
+            })
         }
     }
 

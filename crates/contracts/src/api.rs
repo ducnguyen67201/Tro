@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{ActionReceipt, ComputerAction, ScreenFrameMeta};
+use crate::{ActionReceipt, PlannedComputerAction, ScreenFrameMeta};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ApiEnvelope<T> {
@@ -55,6 +55,7 @@ pub struct TutorTurnMetadata {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct TutorTurnResponse {
     pub guidance: String,
+    pub computer_goal: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -74,7 +75,7 @@ pub struct AgentTurnMetadata {
 pub struct AgentTurnResponse {
     pub run_id: String,
     pub turn_number: u32,
-    pub actions: Vec<ComputerAction>,
+    pub actions: Vec<PlannedComputerAction>,
     pub completed: bool,
 }
 

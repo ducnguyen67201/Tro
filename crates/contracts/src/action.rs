@@ -179,6 +179,37 @@ pub enum ComputerAction {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+pub enum ActionTarget {
+    Benign,
+    KnownEditor,
+    UnknownField,
+    Submit,
+    Upload,
+    Delete,
+    Download,
+    Settings,
+    ExternalNavigation,
+    PersonalData,
+    Password,
+    Otp,
+    Payment,
+    Banking,
+    Legal,
+    Medical,
+    Government,
+    ProctoredAssessment,
+    PermissionOrSecurity,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+pub struct PlannedComputerAction {
+    pub action: ComputerAction,
+    pub target: ActionTarget,
+    pub description_vi: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum RiskTier {
     Low,
     Confirm,

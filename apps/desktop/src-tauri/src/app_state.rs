@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use contracts::{AgentState, AssistantUiState, ScreenFrame};
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 #[cfg(target_os = "macos")]
 use crate::services::modifier_shortcut::CommandOptionShortcut;
@@ -10,6 +11,7 @@ use crate::{
     services::{
         audio::{AudioBackend, CpalAudioBackend},
         capture::{CaptureBackend, XcapCaptureBackend},
+        computer_use::ComputerUseGateway,
         cursor_companion::CursorCompanion,
         foreground::{ForegroundContextBackend, PlatformForegroundBackend},
         input::{InputBackend, NativeInputBackend},
@@ -24,10 +26,12 @@ pub struct AppState {
     pub audio: Arc<dyn AudioBackend>,
     pub pending_frame: Mutex<Option<ScreenFrame>>,
     pub llm: LlmGateway,
+    pub computer_use: ComputerUseGateway,
     pub llm_config: RwLock<LlmConfig>,
     pub input: Arc<dyn InputBackend>,
     pub foreground: Arc<dyn ForegroundContextBackend>,
     pub confirmation: Mutex<ConfirmationManager>,
+    confirmation_waiter: Mutex<Option<ConfirmationWaiter>>,
     pub cursor_companion: CursorCompanion,
     #[cfg(target_os = "macos")]
     pub command_option_shortcut: CommandOptionShortcut,
@@ -43,10 +47,12 @@ impl AppState {
             audio: Arc::new(CpalAudioBackend::default()),
             pending_frame: Mutex::new(None),
             llm: LlmGateway::default(),
+            computer_use: ComputerUseGateway::default(),
             llm_config: RwLock::new(LlmConfig::load()),
             input: Arc::new(NativeInputBackend),
             foreground: Arc::new(PlatformForegroundBackend),
             confirmation: Mutex::new(ConfirmationManager::default()),
+            confirmation_waiter: Mutex::new(None),
             cursor_companion: CursorCompanion::default(),
             #[cfg(target_os = "macos")]
             command_option_shortcut: CommandOptionShortcut::default(),
@@ -86,4 +92,49 @@ impl AppState {
         *snapshot = AssistantUiState::default();
         snapshot.agent = AgentState::Idle;
     }
+
+    pub fn wait_for_confirmation(&self, id: Uuid) -> tokio::sync::oneshot::Receiver<bool> {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let previous = self
+            .confirmation_waiter
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .replace(ConfirmationWaiter { id, sender });
+        if let Some(previous) = previous {
+            let _result = previous.sender.send(false);
+        }
+        receiver
+    }
+
+    pub fn resolve_confirmation_waiter(&self, id: Uuid, allowed: bool) -> bool {
+        let waiter = self
+            .confirmation_waiter
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
+        let Some(waiter) = waiter else {
+            return false;
+        };
+        if waiter.id != id {
+            let _result = waiter.sender.send(false);
+            return false;
+        }
+        waiter.sender.send(allowed).is_ok()
+    }
+
+    pub fn cancel_confirmation_waiter(&self) {
+        if let Some(waiter) = self
+            .confirmation_waiter
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
+        {
+            let _result = waiter.sender.send(false);
+        }
+    }
+}
+
+struct ConfirmationWaiter {
+    id: Uuid,
+    sender: tokio::sync::oneshot::Sender<bool>,
 }

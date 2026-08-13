@@ -10,7 +10,9 @@ impl ForegroundContextBackend for PlatformForegroundBackend {
             process_hash: "unknown".to_owned(),
             window_generation: 0,
             control_role: None,
-            is_secure: true,
+            // Sensitive targets are still blocked by the action target policy. The
+            // platform backend does not currently expose a reliable secure-field bit.
+            is_secure: false,
             is_elevated: false,
         }
     }

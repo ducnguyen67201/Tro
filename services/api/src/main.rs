@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use api::{
-    AppConfig, AppState, OpenAiProvider, OpenRouterTutorProvider, Repository, build_router,
+    AppConfig, AppState, CloudProvider, OpenRouterTutorProvider, Repository, build_router,
     repositories::{MemoryRepository, PgRepository},
     services::device_tokens,
 };
@@ -34,15 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await?;
         Arc::new(PgRepository::new(pool))
     };
-    let provider = Arc::new(OpenAiProvider::new(
-        config
-            .openai_api_key
-            .as_ref()
-            .map_or_else(String::new, |key| key.expose().to_owned()),
-        config.openai_realtime_model.clone(),
-        config.openai_computer_model.clone(),
-        config.openai_realtime_voice.clone(),
-    ));
+    let provider = Arc::new(CloudProvider::new(&config));
     let tutor_provider = Arc::new(OpenRouterTutorProvider::new(&config));
     let state = AppState::new(config.clone(), repository, provider, tutor_provider);
     let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;

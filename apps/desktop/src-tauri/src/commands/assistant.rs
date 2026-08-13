@@ -133,9 +133,20 @@ pub async fn finish_assistant(
     };
     match result {
         Ok(response) => {
-            set_assistant_response(&app, &state, response)?;
-            show_result_card(&app, &state);
-            Ok(())
+            let computer_goal = response.computer_goal;
+            set_assistant_response(&app, &state, response.guidance)?;
+            if let Some(goal) = computer_goal {
+                set_assistant(
+                    &app,
+                    &state,
+                    AssistantEvent::Complete,
+                    "Đang chuyển sang computer use…",
+                )?;
+                crate::commands::agent::run_agent_goal(&app, &state, &goal).await
+            } else {
+                show_result_card(&app, &state);
+                Ok(())
+            }
         }
         Err(error) => fail_and_show(&app, &state, error),
     }

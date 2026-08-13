@@ -1,6 +1,7 @@
 pub mod api_client;
 pub mod audio;
 pub mod capture;
+pub mod computer_use;
 pub mod cursor_companion;
 pub mod dictation;
 pub mod foreground;
