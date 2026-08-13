@@ -14,4 +14,4 @@ node_modules/
 *.pfx
 *.key
 /.sqlx/
-/.claude/PRPs/plans/
+/.claude/
