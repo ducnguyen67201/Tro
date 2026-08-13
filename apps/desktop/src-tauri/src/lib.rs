@@ -35,11 +35,11 @@ pub fn run() {
             services::hotkeys::build_tray(app)?;
             services::cursor_companion::CursorCompanion::create_window(app.handle())?;
             services::overlay::create_overlays(app.handle())?;
-            app.state::<AppState>().reset_after_restart();
+            let state = app.state::<AppState>();
+            state.reset_after_restart();
+            state.cursor_companion.follow(app.handle())?;
             #[cfg(target_os = "macos")]
-            app.state::<AppState>()
-                .command_option_shortcut
-                .ensure_started(app.handle());
+            state.command_option_shortcut.ensure_started(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

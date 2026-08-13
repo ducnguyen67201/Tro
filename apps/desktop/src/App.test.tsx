@@ -177,13 +177,22 @@ describe("App background lifecycle", () => {
     expect(bridge.showMainWindow).toHaveBeenCalled();
   });
 
-  test("finishes instead of cancelling when the shortcut is released", async () => {
+  test("uses the hold shortcut only for capture and leaves the follower alone", async () => {
     localStorage.setItem("tro.onboarded", "true");
     render(<App />);
     await waitFor(() => {
       expect(bridge.shortcut).toBeTypeOf("function");
+      expect(bridge.followCursorCompanion).toHaveBeenCalled();
+      expect(bridge.hideMainWindow).toHaveBeenCalled();
     });
+    vi.clearAllMocks();
 
+    act(() => {
+      bridge.shortcut?.("ask");
+    });
+    await waitFor(() => {
+      expect(bridge.startAssistant).toHaveBeenCalledWith("command_option");
+    });
     act(() => {
       bridge.shortcut?.("ask_release");
     });
@@ -192,5 +201,7 @@ describe("App background lifecycle", () => {
         "command_option_released",
       );
     });
+    expect(bridge.followCursorCompanion).not.toHaveBeenCalled();
+    expect(bridge.hideMainWindow).not.toHaveBeenCalled();
   });
 });

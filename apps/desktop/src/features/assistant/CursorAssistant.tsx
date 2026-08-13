@@ -21,7 +21,7 @@ const stateLabels: Record<AppSnapshot["assistant"], string> = {
 };
 
 export function CursorAssistant() {
-  const [phase, setPhase] = useState<CursorCompanionPhase>("hidden");
+  const [phase, setPhase] = useState<CursorCompanionPhase>("following");
   const [snapshot, setSnapshot] = useState(initialSnapshot);
 
   useEffect(() => {

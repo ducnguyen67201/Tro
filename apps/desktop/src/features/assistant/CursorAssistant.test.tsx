@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AppSnapshot, CursorCompanionSnapshot } from "../../lib/contracts";
+import { desktop } from "../../lib/tauri";
 import { CursorAssistant } from "./CursorAssistant";
 
 const bridge = vi.hoisted(() => ({
@@ -50,6 +51,16 @@ describe("CursorAssistant", () => {
       expect(container.querySelector(".cursor-following")).toBeInTheDocument();
     });
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  test("renders the orb while the native phase snapshot is still loading", () => {
+    vi.mocked(desktop.cursorCompanionSnapshot).mockReturnValueOnce(
+      new Promise<CursorCompanionSnapshot>(() => undefined),
+    );
+
+    const { container } = render(<CursorAssistant />);
+
+    expect(container.querySelector(".cursor-following")).toBeInTheDocument();
   });
 
   test("shows assistant state and stops an active anchored turn", async () => {

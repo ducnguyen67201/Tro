@@ -76,15 +76,22 @@ impl CursorCompanion {
     }
 
     pub fn follow(&self, app: &AppHandle) -> tauri::Result<()> {
-        {
+        let already_tracking = {
             let runtime = self
                 .runtime
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if runtime.phase == CursorCompanionPhase::Following {
-                return Ok(());
-            }
+            runtime.phase == CursorCompanionPhase::Following && runtime.tracker.is_some()
+        };
+
+        if already_tracking {
+            let window = companion_window(app)?;
+            configure_window(&window, false, true)?;
+            position_window(app, &window, ORB_WIDTH, ORB_HEIGHT)?;
+            emit_phase(&window, CursorCompanionPhase::Following);
+            return window.show();
         }
+
         self.stop_tracker();
 
         let window = companion_window(app)?;
