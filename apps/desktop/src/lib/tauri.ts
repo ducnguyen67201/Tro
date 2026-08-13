@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppSettings,
   AppSnapshot,
+  AuthSnapshot,
   ConfirmationRequest,
   CursorCompanionSnapshot,
   LlmConfig,
@@ -29,6 +30,20 @@ export const defaultAskShortcut = () =>
   isMacOS() ? "Command+Option" : "CommandOrControl+Shift+Space";
 
 export const desktop = {
+  authSnapshot: async (): Promise<AuthSnapshot> =>
+    inTauri()
+      ? invoke<AuthSnapshot>("get_auth_snapshot")
+      : { authenticated: false },
+  signIn: async (
+    inviteCode: string,
+    acceptedAgeScope: boolean,
+  ): Promise<AuthSnapshot> =>
+    inTauri()
+      ? invoke<AuthSnapshot>("sign_in_with_invite", {
+          inviteCode,
+          acceptedAgeScope,
+        })
+      : { authenticated: true },
   snapshot: async (): Promise<AppSnapshot> =>
     inTauri() ? invoke<AppSnapshot>("get_app_snapshot") : browserSnapshot,
   permissions: async (): Promise<PermissionSnapshot> =>
@@ -140,5 +155,13 @@ export const desktop = {
   onOpenSettings: (handler: () => void): Promise<UnlistenFn> =>
     inTauri()
       ? listen("open_settings", handler)
+      : Promise.resolve(() => undefined),
+  onAuthenticationChanged: (
+    handler: (snapshot: AuthSnapshot) => void,
+  ): Promise<UnlistenFn> =>
+    inTauri()
+      ? listen<AuthSnapshot>("authentication_changed", (event) => {
+          handler(event.payload);
+        })
       : Promise.resolve(() => undefined),
 };

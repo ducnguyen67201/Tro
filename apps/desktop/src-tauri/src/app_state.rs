@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{
+    Arc, Mutex, RwLock,
+    atomic::{AtomicBool, Ordering},
+};
 
 use contracts::{AgentState, AssistantUiState, ScreenFrame};
 use tokio::sync::Notify;
@@ -11,6 +14,7 @@ use crate::{
     domain::{confirmation::ConfirmationManager, settings::AppSettings},
     services::{
         audio::{AudioBackend, CpalAudioBackend},
+        auth::AuthGateway,
         capture::{CaptureBackend, XcapCaptureBackend},
         computer_use::ComputerUseGateway,
         cursor_companion::CursorCompanion,
@@ -26,6 +30,7 @@ pub struct AppState {
     pub settings: RwLock<AppSettings>,
     pub capture: Arc<dyn CaptureBackend>,
     pub audio: Arc<dyn AudioBackend>,
+    pub auth: AuthGateway,
     pub pending_frame: Mutex<Option<ScreenFrame>>,
     pub frame_ready: Notify,
     pub llm: LlmGateway,
@@ -37,6 +42,7 @@ pub struct AppState {
     pub confirmation: Mutex<ConfirmationManager>,
     confirmation_waiter: Mutex<Option<ConfirmationWaiter>>,
     pub cursor_companion: CursorCompanion,
+    authenticated: AtomicBool,
     #[cfg(target_os = "macos")]
     pub command_option_shortcut: CommandOptionShortcut,
     cancellation: RwLock<CancellationToken>,
@@ -49,6 +55,7 @@ impl AppState {
             settings: RwLock::new(AppSettings::default()),
             capture: Arc::new(XcapCaptureBackend),
             audio: Arc::new(CpalAudioBackend::default()),
+            auth: AuthGateway::default(),
             pending_frame: Mutex::new(None),
             frame_ready: Notify::new(),
             llm: LlmGateway::default(),
@@ -60,10 +67,20 @@ impl AppState {
             confirmation: Mutex::new(ConfirmationManager::default()),
             confirmation_waiter: Mutex::new(None),
             cursor_companion: CursorCompanion::default(),
+            // A stored token is not trusted until the backend refreshes it.
+            authenticated: AtomicBool::new(false),
             #[cfg(target_os = "macos")]
             command_option_shortcut: CommandOptionShortcut::default(),
             cancellation: RwLock::new(CancellationToken::new()),
         }
+    }
+
+    pub fn is_authenticated(&self) -> bool {
+        self.authenticated.load(Ordering::Acquire)
+    }
+
+    pub fn set_authenticated(&self, authenticated: bool) {
+        self.authenticated.store(authenticated, Ordering::Release);
     }
 
     pub fn cancellation(&self) -> CancellationToken {

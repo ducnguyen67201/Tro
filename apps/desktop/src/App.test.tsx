@@ -14,6 +14,8 @@ const bridge = vi.hoisted(() => ({
   showMainWindow: vi.fn(() => Promise.resolve()),
   hideMainWindow: vi.fn(() => Promise.resolve()),
   followCursorCompanion: vi.fn(() => Promise.resolve()),
+  dismissCursorCompanion: vi.fn(() => Promise.resolve()),
+  authSnapshot: vi.fn(() => Promise.resolve({ authenticated: true })),
   startAssistant: vi.fn(() => Promise.resolve()),
   finishAssistant: vi.fn(() => Promise.resolve()),
   emergencyStop: vi.fn(() => Promise.resolve()),
@@ -25,8 +27,11 @@ const bridge = vi.hoisted(() => ({
     }),
   ),
   openSettings: undefined as (() => void) | undefined,
+  authenticationChanged: undefined as
+    | ((snapshot: { authenticated: boolean }) => void)
+    | undefined,
   shortcut: undefined as ((action: string) => void) | undefined,
-  unlisteners: [vi.fn(), vi.fn(), vi.fn(), vi.fn()],
+  unlisteners: [vi.fn(), vi.fn(), vi.fn(), vi.fn(), vi.fn()],
 }));
 
 vi.mock("./features/assistant/assistantStore", () => ({
@@ -47,6 +52,20 @@ vi.mock("./features/onboarding/Onboarding", () => ({
   Onboarding: ({ onComplete }: { onComplete: () => void }) => (
     <button type="button" onClick={onComplete}>
       Finish onboarding
+    </button>
+  ),
+}));
+
+vi.mock("./features/auth/SignIn", () => ({
+  SignIn: ({
+    checking,
+    onAuthenticated,
+  }: {
+    checking: boolean;
+    onAuthenticated: () => void;
+  }) => (
+    <button type="button" disabled={checking} onClick={onAuthenticated}>
+      Sign in
     </button>
   ),
 }));
@@ -72,17 +91,25 @@ vi.mock("./lib/tauri", () => ({
     ),
     onSnapshot: vi.fn(() => Promise.resolve(bridge.unlisteners[0])),
     onConfirmation: vi.fn(() => Promise.resolve(bridge.unlisteners[1])),
+    authSnapshot: bridge.authSnapshot,
+    onAuthenticationChanged: vi.fn(
+      (handler: (snapshot: { authenticated: boolean }) => void) => {
+        bridge.authenticationChanged = handler;
+        return Promise.resolve(bridge.unlisteners[2]);
+      },
+    ),
     onGlobalShortcut: vi.fn((handler: (action: string) => void) => {
       bridge.shortcut = handler;
-      return Promise.resolve(bridge.unlisteners[2]);
+      return Promise.resolve(bridge.unlisteners[3]);
     }),
     onOpenSettings: vi.fn((handler: () => void) => {
       bridge.openSettings = handler;
-      return Promise.resolve(bridge.unlisteners[3]);
+      return Promise.resolve(bridge.unlisteners[4]);
     }),
     showMainWindow: bridge.showMainWindow,
     hideMainWindow: bridge.hideMainWindow,
     followCursorCompanion: bridge.followCursorCompanion,
+    dismissCursorCompanion: bridge.dismissCursorCompanion,
     startAssistant: bridge.startAssistant,
     finishAssistant: bridge.finishAssistant,
     emergencyStop: bridge.emergencyStop,
@@ -113,8 +140,10 @@ describe("App background lifecycle", () => {
       },
     });
     bridge.openSettings = undefined;
+    bridge.authenticationChanged = undefined;
     bridge.shortcut = undefined;
     vi.clearAllMocks();
+    bridge.authSnapshot.mockResolvedValue({ authenticated: true });
   });
 
   test("shows onboarding once and hides after completion", async () => {
@@ -133,6 +162,24 @@ describe("App background lifecycle", () => {
       expect(bridge.hideMainWindow).toHaveBeenCalled();
       expect(bridge.followCursorCompanion).toHaveBeenCalled();
     });
+  });
+
+  test("asks for login before a shortcut can start recording", async () => {
+    localStorage.setItem("tro.onboarded", "true");
+    bridge.authSnapshot.mockResolvedValueOnce({ authenticated: false });
+    render(<App />);
+
+    expect(
+      await screen.findByRole("button", { name: "Sign in" }),
+    ).toBeEnabled();
+    await waitFor(() => expect(bridge.shortcut).toBeTypeOf("function"));
+    act(() => {
+      bridge.shortcut?.("ask");
+    });
+
+    expect(bridge.startAssistant).not.toHaveBeenCalled();
+    expect(bridge.showMainWindow).toHaveBeenCalled();
+    expect(bridge.dismissCursorCompanion).toHaveBeenCalled();
   });
 
   test("keeps the main window hidden and starts the cursor follower", async () => {

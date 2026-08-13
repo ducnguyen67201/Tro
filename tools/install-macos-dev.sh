@@ -19,7 +19,6 @@ TRO_API_JOB="vn.tro.api.doppler-dev"
 TRO_DESKTOP_PLIST="${TMPDIR:-/tmp}/$TRO_DESKTOP_JOB.plist"
 TRO_DOPPLER_PROJECT="tro"
 TRO_BACKEND_CONFIG="dev"
-TRO_DESKTOP_CONFIG="dev_desktop"
 TRO_API_BIND_ADDR="127.0.0.1:18080"
 TRO_API_URL="http://$TRO_API_BIND_ADDR"
 TRO_HEALTH_URL="$TRO_API_URL/healthz"
@@ -67,25 +66,23 @@ if ! doppler run --project "$TRO_DOPPLER_PROJECT" --config "$TRO_BACKEND_CONFIG"
   printf '%s\n' "Backend credentials are missing from Doppler." >&2
   exit 1
 fi
-if ! doppler run --project "$TRO_DOPPLER_PROJECT" --config "$TRO_DESKTOP_CONFIG" -- \
-  sh -c 'test -n "${TRO_DEVICE_TOKEN:-}" && test -n "${TRO_API_BASE_URL:-}" && test -z "${OPENROUTER_API_KEY:-}"'; then
-  printf '%s\n' "Desktop Doppler config is missing or contains a provider credential." >&2
-  exit 1
-fi
-
-# The backend receives provider credentials. The desktop receives only its
-# revocable Tro device token and the API URL from a separate Doppler config.
+# The backend receives provider credentials. The desktop receives no provider
+# credential and establishes its own revocable session through onboarding.
 /bin/launchctl submit \
   -l "$TRO_API_JOB" \
   -o "$TRO_API_LOG" \
   -e "$TRO_API_LOG" \
-  -- "$DOPPLER_EXECUTABLE" run \
+  -- /usr/bin/env -i \
+  HOME="$HOME" \
+  PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+  "$DOPPLER_EXECUTABLE" run \
   --project "$TRO_DOPPLER_PROJECT" \
   --config "$TRO_BACKEND_CONFIG" \
   -- /usr/bin/env \
   AGENT_ENABLED=true \
   BIND_ADDR="$TRO_API_BIND_ADDR" \
   REALTIME_ENABLED=false \
+  TRO_DEVELOPMENT_INVITE_CODE=TRO-LOCAL \
   "$TRO_API_EXECUTABLE"
 attempt=0
 while ! /usr/bin/curl --fail --silent --max-time 1 "$TRO_HEALTH_URL" >/dev/null; do
@@ -103,17 +100,13 @@ done
 /usr/bin/plutil -create xml1 "$TRO_DESKTOP_PLIST"
 /usr/bin/plutil -insert Label -string "$TRO_DESKTOP_JOB" "$TRO_DESKTOP_PLIST"
 /usr/bin/plutil -insert ProgramArguments -array "$TRO_DESKTOP_PLIST"
-/usr/bin/plutil -insert ProgramArguments.0 -string "$DOPPLER_EXECUTABLE" "$TRO_DESKTOP_PLIST"
-/usr/bin/plutil -insert ProgramArguments.1 -string run "$TRO_DESKTOP_PLIST"
-/usr/bin/plutil -insert ProgramArguments.2 -string --project "$TRO_DESKTOP_PLIST"
-/usr/bin/plutil -insert ProgramArguments.3 -string "$TRO_DOPPLER_PROJECT" "$TRO_DESKTOP_PLIST"
-/usr/bin/plutil -insert ProgramArguments.4 -string --config "$TRO_DESKTOP_PLIST"
-/usr/bin/plutil -insert ProgramArguments.5 -string "$TRO_DESKTOP_CONFIG" "$TRO_DESKTOP_PLIST"
-/usr/bin/plutil -insert ProgramArguments.6 -string -- "$TRO_DESKTOP_PLIST"
-/usr/bin/plutil -insert ProgramArguments.7 -string /usr/bin/env "$TRO_DESKTOP_PLIST"
-/usr/bin/plutil -insert ProgramArguments.8 -string TRO_DEV_MANAGED_BACKEND=1 "$TRO_DESKTOP_PLIST"
-/usr/bin/plutil -insert ProgramArguments.9 -string "TRO_API_BASE_URL=$TRO_API_URL" "$TRO_DESKTOP_PLIST"
-/usr/bin/plutil -insert ProgramArguments.10 -string "$TRO_EXECUTABLE" "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.0 -string /usr/bin/env "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.1 -string -i "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.2 -string "HOME=$HOME" "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.3 -string PATH=/usr/bin:/bin:/usr/sbin:/sbin "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.4 -string TRO_DEV_MANAGED_BACKEND=1 "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.5 -string "TRO_API_BASE_URL=$TRO_API_URL" "$TRO_DESKTOP_PLIST"
+/usr/bin/plutil -insert ProgramArguments.6 -string "$TRO_EXECUTABLE" "$TRO_DESKTOP_PLIST"
 /usr/bin/plutil -insert RunAtLoad -bool true "$TRO_DESKTOP_PLIST"
 /usr/bin/plutil -insert KeepAlive -bool false "$TRO_DESKTOP_PLIST"
 /usr/bin/plutil -insert ProcessType -string Interactive "$TRO_DESKTOP_PLIST"

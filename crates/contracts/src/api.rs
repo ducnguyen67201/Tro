@@ -24,6 +24,11 @@ pub struct DeviceTokenResponse {
     pub expires_at_unix: i64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct AuthSnapshot {
+    pub authenticated: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct RealtimeSecretRequest {
     pub locale: String,

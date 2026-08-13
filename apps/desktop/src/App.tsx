@@ -1,17 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAgentStore } from "./features/agent/agentStore";
 import { useAssistantStore } from "./features/assistant/assistantStore";
+import { SignIn } from "./features/auth/SignIn";
 import { Onboarding } from "./features/onboarding/Onboarding";
 import { SettingsPage } from "./features/settings/SettingsPage";
 import { desktop } from "./lib/tauri";
 
 const MAX_HOLD_TO_TALK_MS = 30_000;
+type AuthState = "checking" | "signed_out" | "signed_in";
 
 export default function App() {
   const [onboarded, setOnboarded] = useState(
     () => localStorage.getItem("tro.onboarded") === "true",
   );
   const [settings, setSettings] = useState(false);
+  const [authState, setAuthState] = useState<AuthState>("checking");
+  const authenticatedRef = useRef(false);
   const setSnapshot = useAssistantStore((state) => state.setSnapshot);
   const setConfirmation = useAgentStore((state) => state.setConfirmation);
 
@@ -46,14 +50,36 @@ export default function App() {
     };
 
     void desktop
+      .authSnapshot()
+      .then((snapshot) => {
+        authenticatedRef.current = snapshot.authenticated;
+        setAuthState(snapshot.authenticated ? "signed_in" : "signed_out");
+      })
+      .catch(() => {
+        authenticatedRef.current = false;
+        setAuthState("signed_out");
+      });
+    void desktop
       .snapshot()
       .then(setSnapshot)
       .catch(() => undefined);
     own(desktop.onSnapshot(setSnapshot));
     own(desktop.onConfirmation(setConfirmation));
     own(
+      desktop.onAuthenticationChanged((snapshot) => {
+        authenticatedRef.current = snapshot.authenticated;
+        setAuthState(snapshot.authenticated ? "signed_in" : "signed_out");
+      }),
+    );
+    own(
       desktop.onGlobalShortcut((action) => {
         if (action === "ask") {
+          if (!authenticatedRef.current) {
+            void desktop.dismissCursorCompanion();
+            void desktop.showMainWindow();
+            setAuthState("signed_out");
+            return;
+          }
           if (pendingAsk) return;
 
           const current = {
@@ -71,7 +97,15 @@ export default function App() {
         if (action === "ask_release") {
           finishPendingAsk("command_option_released");
         }
-        if (action === "dictation") void desktop.startAssistant();
+        if (action === "dictation") {
+          if (!authenticatedRef.current) {
+            void desktop.dismissCursorCompanion();
+            void desktop.showMainWindow();
+            setAuthState("signed_out");
+          } else {
+            void desktop.startAssistant();
+          }
+        }
         if (action === "stop") void desktop.emergencyStop();
       }),
     );
@@ -89,7 +123,23 @@ export default function App() {
   }, [setConfirmation, setSnapshot]);
 
   useEffect(() => {
+    authenticatedRef.current = authState === "signed_in";
+  }, [authState]);
+
+  useEffect(() => {
     let disposed = false;
+    if (authState === "checking") {
+      return () => {
+        disposed = true;
+      };
+    }
+    if (authState === "signed_out") {
+      void desktop.dismissCursorCompanion();
+      void desktop.showMainWindow();
+      return () => {
+        disposed = true;
+      };
+    }
     if (!onboarded) {
       void desktop.showMainWindow();
       return () => {
@@ -115,7 +165,18 @@ export default function App() {
     return () => {
       disposed = true;
     };
-  }, [onboarded]);
+  }, [authState, onboarded]);
+
+  if (authState !== "signed_in")
+    return (
+      <SignIn
+        checking={authState === "checking"}
+        onAuthenticated={() => {
+          authenticatedRef.current = true;
+          setAuthState("signed_in");
+        }}
+      />
+    );
 
   if (!onboarded)
     return (

@@ -38,7 +38,11 @@ pub fn run() {
             services::overlay::create_overlays(app.handle())?;
             let state = app.state::<AppState>();
             state.reset_after_restart();
-            state.cursor_companion.follow(app.handle())?;
+            if state.is_authenticated() {
+                state.cursor_companion.follow(app.handle())?;
+            } else {
+                state.cursor_companion.hide(app.handle())?;
+            }
             #[cfg(target_os = "macos")]
             state.command_option_shortcut.ensure_started(app.handle());
             Ok(())
@@ -50,6 +54,8 @@ pub fn run() {
             commands::assistant::stop_assistant,
             commands::assistant::start_dictation,
             commands::assistant::stop_dictation,
+            commands::auth::get_auth_snapshot,
+            commands::auth::sign_in_with_invite,
             commands::agent::start_agent,
             commands::agent::resolve_confirmation,
             commands::agent::emergency_stop,

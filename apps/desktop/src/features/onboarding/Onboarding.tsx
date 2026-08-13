@@ -6,9 +6,6 @@ import { PermissionCard } from "./PermissionCard";
 
 export function Onboarding({ onComplete }: { onComplete: () => void }) {
   const { t } = useTranslation();
-  const [step, setStep] = useState<"welcome" | "permissions">("welcome");
-  const [invite, setInvite] = useState("");
-  const [age, setAge] = useState(false);
   const [requesting, setRequesting] = useState<keyof PermissionSnapshot | null>(
     null,
   );
@@ -50,84 +47,13 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
       });
   };
 
-  if (step === "welcome") {
-    return (
-      <main className="onboarding-shell">
-        <section className="onboarding-hero">
-          <div className="brand-lockup">
-            <span className="brand-mark">T</span>
-            <span>Tro</span>
-          </div>
-          <span className="pill">Dành cho sinh viên Việt Nam</span>
-          <h1>
-            Đừng chỉ nhận đáp án.
-            <br />
-            <em>Hãy hiểu cách làm.</em>
-          </h1>
-          <p>
-            Tro nhìn phần màn hình bạn chọn, nghe câu hỏi bằng tiếng Việt và
-            hướng dẫn từng bước ngay trên ứng dụng đang dùng.
-          </p>
-          <ul className="trust-list">
-            <li>
-              <span>✓</span> Chỉ chụp màn hình khi bạn bấm hỏi
-            </li>
-            <li>
-              <span>✓</span> Không lưu ảnh, âm thanh hay bài làm
-            </li>
-            <li>
-              <span>✓</span> Bạn luôn có nút dừng khẩn cấp
-            </li>
-          </ul>
-        </section>
-        <section className="invite-card">
-          <span className="eyebrow">Bản thử nghiệm riêng tư</span>
-          <h2>Bắt đầu với Tro</h2>
-          <label htmlFor="invite">{t("invite")}</label>
-          <input
-            id="invite"
-            value={invite}
-            onChange={(event) => {
-              setInvite(event.target.value);
-            }}
-            placeholder="TRO-••••-••••"
-            autoComplete="off"
-          />
-          <label className="check-row">
-            <input
-              type="checkbox"
-              checked={age}
-              onChange={(event) => {
-                setAge(event.target.checked);
-              }}
-            />
-            <span>{t("age")}</span>
-          </label>
-          <button
-            className="button primary wide"
-            disabled={invite.trim().length < 4 || !age}
-            onClick={() => {
-              setStep("permissions");
-            }}
-          >
-            {t("continue")} <span>→</span>
-          </button>
-          <p className="fine-print">
-            Bằng việc tiếp tục, bạn đồng ý với thông báo quyền riêng tư của
-            chương trình thử nghiệm.
-          </p>
-        </section>
-      </main>
-    );
-  }
-
   return (
     <main className="permission-shell">
       <div className="brand-lockup">
         <span className="brand-mark">T</span>
         <span>Tro</span>
       </div>
-      <span className="eyebrow">Bước 2 / 2</span>
+      <span className="eyebrow">Thiết lập một lần</span>
       <h1>{t("permissions")}</h1>
       <p>
         Tro hoạt động theo nguyên tắc hỏi trước, dùng sau. Điều khiển nhập liệu

@@ -3,7 +3,9 @@ use crate::{
     domain::error::internal,
     services::{llm::LlmTurnInput, overlay},
 };
-use contracts::{AppError, AssistantEvent, AssistantState, AssistantUiState, PhysicalPoint};
+use contracts::{
+    AppError, AssistantEvent, AssistantState, AssistantUiState, ErrorCode, PhysicalPoint,
+};
 use tauri::{AppHandle, Emitter, State};
 
 #[tauri::command]
@@ -21,6 +23,7 @@ pub async fn start_assistant(
     state: State<'_, AppState>,
     source: String,
 ) -> Result<(), AppError> {
+    crate::commands::auth::require_authentication(&app, &state)?;
     if source.len() > 32 {
         return Err(internal("Nguồn yêu cầu không hợp lệ."));
     }
@@ -139,7 +142,10 @@ pub async fn finish_assistant(
                 Ok(())
             }
         }
-        Err(error) => fail_and_show(&app, &state, error),
+        Err(error) => {
+            crate::commands::auth::handle_auth_error(&app, &state, &error);
+            fail_and_show(&app, &state, error)
+        }
     }
 }
 
@@ -175,6 +181,7 @@ pub fn stop_assistant(
 
 #[tauri::command]
 pub fn start_dictation(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
+    crate::commands::auth::require_authentication(&app, &state)?;
     state.audio.start_push_to_talk()?;
     set_assistant(
         &app,
@@ -255,7 +262,11 @@ fn fail_and_show(
         .take();
     state.frame_ready.notify_waiters();
     let _failed = set_assistant(app, state, AssistantEvent::Fail, &error.message_vi);
-    show_result_card(app, state);
+    if error.code == ErrorCode::AuthExpired {
+        let _hidden = state.cursor_companion.hide(app);
+    } else {
+        show_result_card(app, state);
+    }
     Err(error)
 }
 

@@ -33,8 +33,8 @@ pub fn dismiss_cursor_companion(
 ) -> Result<(), AppError> {
     state
         .cursor_companion
-        .follow(&app)
-        .map_err(|error| window_error("restore_cursor_companion", error))
+        .hide(&app)
+        .map_err(|error| window_error("dismiss_cursor_companion", error))
 }
 
 pub fn show_main(app: &AppHandle) -> Result<(), AppError> {

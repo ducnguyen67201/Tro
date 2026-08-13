@@ -20,6 +20,17 @@ pub fn device_token_configured() -> bool {
     load_device_token().is_ok_and(|token| token.is_some())
 }
 
+pub fn delete_device_token() -> Result<(), AppError> {
+    if std::env::var("TRO_DEVICE_TOKEN").is_ok() {
+        return Ok(());
+    }
+    let entry = keyring::Entry::new(SERVICE, DEVICE_TOKEN).map_err(secret_error)?;
+    match entry.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(error) => Err(secret_error(error)),
+    }
+}
+
 fn load(account: &str) -> Result<Option<String>, AppError> {
     let entry = keyring::Entry::new(SERVICE, account).map_err(secret_error)?;
     match entry.get_password() {

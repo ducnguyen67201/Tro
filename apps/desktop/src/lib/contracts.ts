@@ -97,3 +97,7 @@ export interface LlmConfig {
   timeout_seconds: number;
   device_authenticated: boolean;
 }
+
+export interface AuthSnapshot {
+  authenticated: boolean;
+}

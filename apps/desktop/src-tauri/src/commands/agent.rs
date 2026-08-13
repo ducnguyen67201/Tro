@@ -53,6 +53,7 @@ pub async fn start_agent(
     goal: String,
     source_frame_id: Option<String>,
 ) -> Result<(), AppError> {
+    crate::commands::auth::require_authentication(&app, &state)?;
     let _source_frame_id = source_frame_id;
     run_agent_goal(&app, &state, &goal).await
 }
@@ -71,6 +72,7 @@ pub async fn run_agent_goal(app: &AppHandle, state: &AppState, goal: &str) -> Re
     prepare_agent(app, state)?;
     let result = run_loop(app, state, goal).await;
     if let Err(error) = &result {
+        let authentication_expired = error.code == ErrorCode::AuthExpired;
         let current = state
             .snapshot
             .read()
@@ -79,7 +81,11 @@ pub async fn run_agent_goal(app: &AppHandle, state: &AppState, goal: &str) -> Re
         if current != AgentState::Stopped {
             let _failed = set_agent(app, state, AgentEvent::Fail, &error.message_vi);
         }
-        let _return = state.cursor_companion.return_to_cursor(app);
+        if authentication_expired {
+            crate::commands::auth::handle_auth_error(app, state, error);
+        } else {
+            let _return = state.cursor_companion.return_to_cursor(app);
+        }
     }
     result
 }

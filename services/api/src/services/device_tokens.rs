@@ -24,6 +24,15 @@ pub async fn register_device(
             "Tro thử nghiệm chỉ dành cho sinh viên đại học từ 18 tuổi.",
         ));
     }
+    if state
+        .config
+        .development_invite_code
+        .as_ref()
+        .is_some_and(|code| code.expose() == request.invite_code)
+        && let Some(token) = &state.config.development_device_token
+    {
+        return Ok(development_session(token.expose()));
+    }
     let candidate = format!(
         "{}{}",
         request.invite_code,
@@ -81,6 +90,14 @@ pub async fn rotate_token(
     device_id: Uuid,
     old_token: &str,
 ) -> Result<DeviceTokenResponse, ApiError> {
+    if state
+        .config
+        .development_device_token
+        .as_ref()
+        .is_some_and(|token| token.expose() == old_token)
+    {
+        return Ok(development_session(old_token));
+    }
     let mut bytes = [0_u8; 32];
     rand::rng().fill_bytes(&mut bytes);
     let token = URL_SAFE_NO_PAD.encode(bytes);
@@ -103,6 +120,13 @@ pub async fn rotate_token(
         device_token: token,
         expires_at_unix: expires_at.unix_timestamp(),
     })
+}
+
+fn development_session(token: &str) -> DeviceTokenResponse {
+    DeviceTokenResponse {
+        device_token: token.to_owned(),
+        expires_at_unix: (OffsetDateTime::now_utc() + Duration::days(30)).unix_timestamp(),
+    }
 }
 
 pub fn bearer_value(header: Option<&str>) -> Result<&str, ApiError> {

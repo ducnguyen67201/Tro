@@ -45,6 +45,7 @@ pub struct AppConfig {
     pub tutor_audio_max_bytes: usize,
     pub tutor_enabled: bool,
     pub development_device_token: Option<SecretValue>,
+    pub development_invite_code: Option<SecretValue>,
     pub device_token_hmac_key: SecretValue,
     pub invite_code_pepper: SecretValue,
     pub agent_continuation_aead_key: SecretValue,
@@ -81,6 +82,7 @@ impl AppConfig {
             tutor_audio_max_bytes: parsed("TUTOR_AUDIO_MAX_BYTES", "3145728")?,
             tutor_enabled: parsed("TUTOR_ENABLED", "true")?,
             development_device_token: optional_secret("TRO_DEVICE_TOKEN"),
+            development_invite_code: optional_secret("TRO_DEVELOPMENT_INVITE_CODE"),
             device_token_hmac_key: secret("DEVICE_TOKEN_HMAC_KEY")?,
             invite_code_pepper: secret("INVITE_CODE_PEPPER")?,
             agent_continuation_aead_key: secret("AGENT_CONTINUATION_AEAD_KEY")?,
@@ -116,6 +118,7 @@ impl AppConfig {
             tutor_audio_max_bytes: 3_145_728,
             tutor_enabled: true,
             development_device_token: None,
+            development_invite_code: None,
             device_token_hmac_key: SecretValue("test-hmac-key-with-at-least-32-bytes".to_owned()),
             invite_code_pepper: SecretValue("test-invite-pepper".to_owned()),
             agent_continuation_aead_key: SecretValue("01234567890123456789012345678901".to_owned()),
@@ -181,6 +184,18 @@ impl AppConfig {
                 || token.expose().contains(char::is_whitespace))
         {
             return Err(ConfigError::Invalid("TRO_DEVICE_TOKEN"));
+        }
+        if let Some(code) = &self.development_invite_code
+            && (self.database_url != "memory://"
+                || !self.bind_addr.ip().is_loopback()
+                || self.development_device_token.is_none()
+                || !(4..=128).contains(&code.expose().len())
+                || !code
+                    .expose()
+                    .chars()
+                    .all(|character| character.is_ascii_alphanumeric() || character == '-'))
+        {
+            return Err(ConfigError::Invalid("TRO_DEVELOPMENT_INVITE_CODE"));
         }
         Ok(())
     }
