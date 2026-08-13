@@ -19,9 +19,11 @@ const ORB_WIDTH: f64 = 52.0;
 const ORB_HEIGHT: f64 = 52.0;
 const CARD_WIDTH: f64 = 380.0;
 const CARD_HEIGHT: f64 = 190.0;
-const CURSOR_GAP: f64 = 16.0;
+const CURSOR_GAP: f64 = 6.0;
 const TRACK_INTERVAL: Duration = Duration::from_millis(16);
 const TRAVEL_DURATION: Duration = Duration::from_millis(192);
+const FOLLOW_RESPONSE: f64 = 0.28;
+const FOLLOW_SNAP_DISTANCE: f64 = 0.75;
 
 #[derive(Debug, Default)]
 pub struct CursorCompanion {
@@ -38,6 +40,27 @@ struct RuntimeState {
 struct Tracker {
     stop: Arc<AtomicBool>,
     worker: Option<JoinHandle<()>>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PursuitPosition {
+    x: f64,
+    y: f64,
+}
+
+impl PursuitPosition {
+    fn new(position: PhysicalPosition<i32>) -> Self {
+        Self {
+            x: f64::from(position.x),
+            y: f64::from(position.y),
+        }
+    }
+
+    fn step(&mut self, target: PhysicalPosition<i32>) -> PhysicalPosition<i32> {
+        self.x = pursuit_axis(self.x, f64::from(target.x));
+        self.y = pursuit_axis(self.y, f64::from(target.y));
+        PhysicalPosition::new(self.x.round() as i32, self.y.round() as i32)
+    }
 }
 
 impl CursorCompanion {
@@ -238,11 +261,20 @@ fn set_phase(runtime: &Mutex<RuntimeState>, phase: CursorCompanionPhase) {
 }
 
 fn track_cursor(app: AppHandle, window: tauri::WebviewWindow, stop: Arc<AtomicBool>) {
-    let mut previous = None;
+    let initial = window.outer_position().ok();
+    let mut pursuit = initial.map(PursuitPosition::new);
+    let mut previous = initial;
     let mut error_logged = false;
     while !stop.load(Ordering::Acquire) {
         match desired_position(&app, ORB_WIDTH, ORB_HEIGHT) {
-            Ok(position) => {
+            Ok(target) => {
+                let position = match &mut pursuit {
+                    Some(pursuit) => pursuit.step(target),
+                    None => {
+                        pursuit = Some(PursuitPosition::new(target));
+                        target
+                    }
+                };
                 if previous != Some(position) {
                     if let Err(error) = window.set_position(position) {
                         if !error_logged {
@@ -273,6 +305,15 @@ fn track_cursor(app: AppHandle, window: tauri::WebviewWindow, stop: Arc<AtomicBo
             }
         }
         thread::sleep(TRACK_INTERVAL);
+    }
+}
+
+fn pursuit_axis(current: f64, target: f64) -> f64 {
+    let distance = target - current;
+    if distance.abs() <= FOLLOW_SNAP_DISTANCE {
+        target
+    } else {
+        current + distance * FOLLOW_RESPONSE
     }
 }
 
@@ -458,7 +499,9 @@ mod tests {
     use contracts::PhysicalPoint;
     use tauri::{PhysicalPosition, PhysicalSize};
 
-    use super::{place_near_cursor, place_over_target, tween_position};
+    use super::{
+        PursuitPosition, physical_gap, place_near_cursor, place_over_target, tween_position,
+    };
 
     #[test]
     fn prefers_below_and_right_of_cursor() {
@@ -467,9 +510,9 @@ mod tests {
             PhysicalSize::new(52, 52),
             PhysicalPosition::new(0, 0),
             PhysicalSize::new(1000, 800),
-            16,
+            physical_gap(1.0),
         );
-        assert_eq!(position, PhysicalPosition::new(116, 116));
+        assert_eq!(position, PhysicalPosition::new(106, 106));
     }
 
     #[test]
@@ -479,9 +522,9 @@ mod tests {
             PhysicalSize::new(100, 80),
             PhysicalPosition::new(0, 0),
             PhysicalSize::new(1000, 800),
-            16,
+            physical_gap(1.0),
         );
-        assert_eq!(position, PhysicalPosition::new(874, 694));
+        assert_eq!(position, PhysicalPosition::new(884, 704));
     }
 
     #[test]
@@ -491,9 +534,9 @@ mod tests {
             PhysicalSize::new(380, 190),
             PhysicalPosition::new(-1920, 0),
             PhysicalSize::new(1920, 1080),
-            16,
+            physical_gap(1.0),
         );
-        assert_eq!(position, PhysicalPosition::new(-1899, 21));
+        assert_eq!(position, PhysicalPosition::new(-1909, 11));
     }
 
     #[test]
@@ -533,5 +576,23 @@ mod tests {
         let destination = PhysicalPosition::new(800, 500);
         assert_eq!(tween_position(start, destination, 0.0), start);
         assert_eq!(tween_position(start, destination, 1.0), destination);
+    }
+
+    #[test]
+    fn pursuit_trails_fast_motion_then_catches_up_exactly() {
+        let mut pursuit = PursuitPosition::new(PhysicalPosition::new(0, 0));
+        let mut position = PhysicalPosition::new(0, 0);
+        for step in 1..=10 {
+            let target = PhysicalPosition::new(step * 20, step * 10);
+            position = pursuit.step(target);
+            assert!(position.x < target.x);
+            assert!(position.y < target.y);
+        }
+
+        let resting = PhysicalPosition::new(200, 100);
+        for _ in 0..30 {
+            position = pursuit.step(resting);
+        }
+        assert_eq!(position, resting);
     }
 }
