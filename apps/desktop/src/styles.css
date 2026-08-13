@@ -692,13 +692,138 @@ footer button {
     transform 160ms ease;
   user-select: none;
 }
-.cursor-orb i {
+.cursor-orb-halo {
   position: absolute;
   z-index: 0;
   inset: 7px;
   border: 1px solid rgba(125, 109, 234, 0.48);
   border-radius: 50%;
   animation: cursor-pulse 1.1s ease-out infinite;
+  transition-property: border-color, box-shadow, opacity, transform;
+  transition-duration: 160ms;
+  transition-timing-function: ease-out;
+}
+.cursor-orb-listening,
+.cursor-orb-processing,
+.cursor-orb-response {
+  position: absolute;
+  z-index: 2;
+  opacity: 0;
+  transition-property: opacity, filter, transform;
+  transition-duration: 160ms;
+  transition-timing-function: ease-out;
+}
+.cursor-orb-listening {
+  bottom: 0;
+  left: 50%;
+  display: flex;
+  width: 22px;
+  height: 12px;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #7462e7, #5142b9);
+  box-shadow: 0 3px 8px rgba(66, 49, 168, 0.38);
+  filter: blur(2px);
+  transform: translate(-50%, 3px) scale(0.72);
+}
+.cursor-orb-listening b {
+  width: 2px;
+  height: 6px;
+  border-radius: 999px;
+  background: white;
+  animation: cursor-listening-bar 560ms ease-in-out infinite alternate;
+  animation-play-state: paused;
+  transform-origin: center;
+}
+.cursor-orb-listening b:first-child {
+  animation-delay: -180ms;
+}
+.cursor-orb-listening b:last-child {
+  animation-delay: -360ms;
+}
+.cursor-orb-processing {
+  inset: -1px;
+  border: 2px solid rgba(103, 87, 216, 0.16);
+  border-top-color: #7d6dea;
+  border-right-color: #a99ff0;
+  border-radius: 50%;
+  filter: blur(1px);
+  animation: cursor-processing-spin 720ms linear infinite;
+  animation-play-state: paused;
+  transform: scale(0.78);
+}
+.cursor-orb-response {
+  right: -1px;
+  bottom: 0;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #35ae79;
+  box-shadow: 0 3px 8px rgba(18, 145, 104, 0.34);
+  filter: blur(2px);
+  transform: translateY(3px) scale(0.65);
+}
+.cursor-orb-response svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: white;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
+}
+.cursor-following.is-listening .cursor-orb img {
+  filter: drop-shadow(0 4px 7px rgba(81, 66, 185, 0.46));
+  transform: translateY(-2px) scale(0.9);
+}
+.cursor-following.is-listening .cursor-orb-halo {
+  border-color: rgba(125, 109, 234, 0.78);
+  box-shadow: 0 0 10px rgba(125, 109, 234, 0.3);
+  animation-duration: 700ms;
+}
+.cursor-following.is-listening .cursor-orb-listening {
+  opacity: 1;
+  filter: blur(0);
+  transform: translate(-50%, 0) scale(1);
+}
+.cursor-following.is-listening .cursor-orb-listening b {
+  animation-play-state: running;
+}
+.cursor-following.is-processing .cursor-orb img {
+  filter: drop-shadow(0 3px 7px rgba(81, 66, 185, 0.42));
+  transform: scale(0.86);
+}
+.cursor-following.is-processing .cursor-orb-halo {
+  opacity: 0;
+}
+.cursor-following.is-processing .cursor-orb-processing {
+  opacity: 1;
+  filter: blur(0);
+  animation-play-state: running;
+  transform: scale(1);
+}
+.cursor-following.is-responding .cursor-orb img {
+  filter: drop-shadow(0 4px 7px rgba(18, 145, 104, 0.42));
+  transform: translateY(-1px) scale(0.94);
+}
+.cursor-following.is-responding .cursor-orb-halo {
+  border-color: rgba(57, 201, 144, 0.62);
+  animation-duration: 760ms;
+}
+.cursor-following.is-responding .cursor-orb-response {
+  opacity: 1;
+  filter: blur(0);
+  transform: translateY(0) scale(1);
+}
+.cursor-following.is-failed .cursor-orb img {
+  filter: grayscale(0.45) sepia(0.25)
+    drop-shadow(0 3px 6px rgba(179, 67, 67, 0.34));
 }
 .cursor-following.is-acting .cursor-orb img {
   filter: drop-shadow(0 3px 6px rgba(18, 145, 104, 0.48));
@@ -835,6 +960,19 @@ footer button {
   to {
     transform: scale(1.18);
     opacity: 0;
+  }
+}
+@keyframes cursor-listening-bar {
+  from {
+    transform: scaleY(0.45);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes cursor-processing-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 @keyframes cursor-card-in {

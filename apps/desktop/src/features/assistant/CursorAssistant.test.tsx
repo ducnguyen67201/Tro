@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { AppSnapshot, CursorCompanionSnapshot } from "../../lib/contracts";
 import { desktop } from "../../lib/tauri";
@@ -15,6 +21,7 @@ const bridge = vi.hoisted(() => ({
   } as AppSnapshot,
   stopAssistant: vi.fn(),
   dismissCursorCompanion: vi.fn(),
+  snapshotHandler: null as ((snapshot: AppSnapshot) => void) | null,
   unlistenCompanion: vi.fn(),
   unlistenSnapshot: vi.fn(),
 }));
@@ -24,7 +31,10 @@ vi.mock("../../lib/tauri", () => ({
     cursorCompanionSnapshot: vi.fn(() => Promise.resolve(bridge.companion)),
     snapshot: vi.fn(() => Promise.resolve(bridge.snapshot)),
     onCursorCompanion: vi.fn(() => Promise.resolve(bridge.unlistenCompanion)),
-    onSnapshot: vi.fn(() => Promise.resolve(bridge.unlistenSnapshot)),
+    onSnapshot: vi.fn((handler: (snapshot: AppSnapshot) => void) => {
+      bridge.snapshotHandler = handler;
+      return Promise.resolve(bridge.unlistenSnapshot);
+    }),
     stopAssistant: bridge.stopAssistant,
     dismissCursorCompanion: bridge.dismissCursorCompanion,
   },
@@ -40,6 +50,7 @@ describe("CursorAssistant", () => {
       status_vi: "Sẵn sàng",
       capture_active: false,
     };
+    bridge.snapshotHandler = null;
     vi.clearAllMocks();
   });
 
@@ -78,6 +89,63 @@ describe("CursorAssistant", () => {
       ).toBeInTheDocument();
     });
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  test.each([
+    ["capturing", "is-listening"],
+    ["listening", "is-listening"],
+    ["thinking", "is-processing"],
+    ["speaking", "is-responding"],
+    ["guiding", "is-responding"],
+  ] as const)(
+    "shows %s feedback inside the following icon",
+    async (assistant, expectedClass) => {
+      bridge.companion = { phase: "following" };
+      bridge.snapshot = {
+        ...bridge.snapshot,
+        assistant,
+      };
+
+      const { container } = render(<CursorAssistant />);
+
+      await waitFor(() => {
+        expect(container.querySelector(".cursor-following")).toHaveClass(
+          expectedClass,
+        );
+      });
+      expect(container.querySelector(".cursor-following")).toHaveAttribute(
+        "data-assistant-state",
+        assistant,
+      );
+    },
+  );
+
+  test("switches from listening to processing when the shortcut is released", async () => {
+    bridge.companion = { phase: "following" };
+    const { container } = render(<CursorAssistant />);
+
+    await waitFor(() => expect(bridge.snapshotHandler).not.toBeNull());
+    act(() => {
+      bridge.snapshotHandler?.({
+        ...bridge.snapshot,
+        assistant: "listening",
+        capture_active: true,
+      });
+    });
+    expect(container.querySelector(".cursor-following")).toHaveClass(
+      "is-listening",
+    );
+
+    act(() => {
+      bridge.snapshotHandler?.({
+        ...bridge.snapshot,
+        assistant: "thinking",
+        capture_active: false,
+      });
+    });
+    expect(container.querySelector(".cursor-following")).toHaveClass(
+      "is-processing",
+    );
   });
 
   test("shows assistant state and stops an active anchored turn", async () => {

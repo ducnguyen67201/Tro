@@ -22,6 +22,23 @@ const stateLabels: Record<AppSnapshot["assistant"], string> = {
   failed: "Tro gặp sự cố",
 };
 
+type CursorFeedback =
+  | "idle"
+  | "listening"
+  | "processing"
+  | "responding"
+  | "failed";
+
+const cursorFeedback: Record<AppSnapshot["assistant"], CursorFeedback> = {
+  idle: "idle",
+  capturing: "listening",
+  listening: "listening",
+  thinking: "processing",
+  speaking: "responding",
+  guiding: "responding",
+  failed: "failed",
+};
+
 export function CursorAssistant() {
   const [phase, setPhase] = useState<CursorCompanionPhase>("following");
   const [snapshot, setSnapshot] = useState(initialSnapshot);
@@ -74,14 +91,27 @@ export function CursorAssistant() {
   if (phase === "hidden") return null;
 
   if (phase === "following" || phase === "acting") {
+    const feedback = cursorFeedback[snapshot.assistant];
     return (
       <div
-        className={`cursor-following${phase === "acting" ? " is-acting" : ""}`}
+        className={`cursor-following is-${feedback}${phase === "acting" ? " is-acting" : ""}`}
+        data-assistant-state={snapshot.assistant}
         aria-hidden="true"
       >
         <div className="cursor-orb">
+          <span className="cursor-orb-halo" />
           <img src={companionImage} alt="" draggable={false} />
-          <i />
+          <span className="cursor-orb-listening">
+            <b />
+            <b />
+            <b />
+          </span>
+          <span className="cursor-orb-processing" />
+          <span className="cursor-orb-response">
+            <svg viewBox="0 0 16 16" focusable="false">
+              <path d="m4.2 8.1 2.3 2.3 5.2-5.2" />
+            </svg>
+          </span>
         </div>
       </div>
     );
