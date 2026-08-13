@@ -10,6 +10,7 @@ use crate::{
     services::{
         audio::{AudioBackend, CpalAudioBackend},
         capture::{CaptureBackend, XcapCaptureBackend},
+        cursor_companion::CursorCompanion,
         foreground::{ForegroundContextBackend, PlatformForegroundBackend},
         input::{InputBackend, NativeInputBackend},
     },
@@ -23,6 +24,7 @@ pub struct AppState {
     pub input: Arc<dyn InputBackend>,
     pub foreground: Arc<dyn ForegroundContextBackend>,
     pub confirmation: Mutex<ConfirmationManager>,
+    pub cursor_companion: CursorCompanion,
     #[cfg(target_os = "macos")]
     pub command_option_shortcut: CommandOptionShortcut,
     cancellation: RwLock<CancellationToken>,
@@ -38,6 +40,7 @@ impl AppState {
             input: Arc::new(NativeInputBackend),
             foreground: Arc::new(PlatformForegroundBackend),
             confirmation: Mutex::new(ConfirmationManager::default()),
+            cursor_companion: CursorCompanion::default(),
             #[cfg(target_os = "macos")]
             command_option_shortcut: CommandOptionShortcut::default(),
             cancellation: RwLock::new(CancellationToken::new()),

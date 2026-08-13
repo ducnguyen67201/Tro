@@ -25,6 +25,14 @@ export interface AppSnapshot {
   capture_active: boolean;
 }
 
+export type CursorCompanionPhase = "hidden" | "following" | "anchored";
+
+export interface CursorCompanionSnapshot {
+  phase: CursorCompanionPhase;
+}
+
+export type ShortcutAction = "ask" | "ask_release" | "dictation" | "stop";
+
 export type PermissionStatus =
   | "not_determined"
   | "granted"

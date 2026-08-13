@@ -84,6 +84,14 @@ pub fn emergency_stop(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .clear();
     overlay::show_all(&app);
+    if let Err(error) = state.cursor_companion.hide(&app) {
+        tracing::warn!(
+            component = "cursor_companion",
+            operation = "hide_after_emergency_stop",
+            error_code = "window_operation_failed",
+            source = %error
+        );
+    }
     let snapshot = {
         let mut snapshot = state
             .snapshot

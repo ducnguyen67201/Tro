@@ -131,7 +131,8 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
       <h1>{t("permissions")}</h1>
       <p>
         Tro hoạt động theo nguyên tắc hỏi trước, dùng sau. Điều khiển nhập liệu
-        có thể bật sau khi bạn chủ động dùng agent.
+        có thể bật sau khi bạn chủ động dùng agent. Sau bước này, Tro sẽ ở trên
+        thanh menu; giữ ⌘ + ⌥ để gọi Tro cạnh con trỏ.
       </p>
       <div className="permission-grid">
         <PermissionCard
@@ -166,7 +167,7 @@ export function Onboarding({ onComplete }: { onComplete: () => void }) {
         />
       </div>
       <button className="button primary" onClick={onComplete}>
-        Vào Tro <span>→</span>
+        Hoàn tất <span>→</span>
       </button>
       <button className="button quiet" onClick={onComplete}>
         {t("later")}

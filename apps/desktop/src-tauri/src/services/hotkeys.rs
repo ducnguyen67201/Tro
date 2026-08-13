@@ -4,8 +4,10 @@ use tauri::{
     tray::TrayIconBuilder,
 };
 
+use crate::{app_state::AppState, commands};
+
 pub fn build_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let ask = MenuItem::with_id(app, "ask", "Hỏi Tro", true, None::<&str>)?;
+    let ask = MenuItem::with_id(app, "ask", "Hiện Tro", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Cài đặt", true, None::<&str>)?;
     let stop = MenuItem::with_id(app, "stop", "Dừng khẩn cấp", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Thoát", true, None::<&str>)?;
@@ -15,10 +17,21 @@ pub fn build_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .menu(&menu)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "quit" => app.exit(0),
+            "ask" => {
+                let state = app.state::<AppState>();
+                if let Err(error) = state.cursor_companion.show_anchored_idle(app) {
+                    tracing::warn!(
+                        component = "cursor_companion",
+                        operation = "show_from_tray",
+                        error_code = "window_operation_failed",
+                        source = %error
+                    );
+                }
+            }
             "settings" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _show = window.show();
-                    let _focus = window.set_focus();
+                if commands::window::show_main(app).is_ok()
+                    && let Some(window) = app.get_webview_window("main")
+                {
                     let _event = window.emit("open_settings", ());
                 }
             }

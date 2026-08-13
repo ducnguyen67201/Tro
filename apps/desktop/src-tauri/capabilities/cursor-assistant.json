@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "cursor-assistant",
+  "description": "Read-only events for the compact cursor assistant",
+  "windows": ["assistant-cursor"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

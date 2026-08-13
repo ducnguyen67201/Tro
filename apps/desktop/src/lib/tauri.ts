@@ -4,8 +4,10 @@ import type {
   AppSettings,
   AppSnapshot,
   ConfirmationRequest,
+  CursorCompanionSnapshot,
   OverlayUpdate,
   PermissionSnapshot,
+  ShortcutAction,
 } from "./contracts";
 
 const inTauri = () =>
@@ -38,6 +40,8 @@ export const desktop = {
         },
   startAssistant: async (source = "ui"): Promise<void> =>
     inTauri() ? invoke("start_assistant", { source }) : undefined,
+  finishAssistant: async (reason = "user_released"): Promise<void> =>
+    inTauri() ? invoke("finish_assistant", { reason }) : undefined,
   stopAssistant: async (reason = "user"): Promise<void> =>
     inTauri() ? invoke("stop_assistant", { reason }) : undefined,
   startAgent: async (goal: string): Promise<void> =>
@@ -67,6 +71,16 @@ export const desktop = {
         },
   restart: async (): Promise<void> =>
     inTauri() ? invoke("restart_app") : undefined,
+  cursorCompanionSnapshot: async (): Promise<CursorCompanionSnapshot> =>
+    inTauri()
+      ? invoke<CursorCompanionSnapshot>("get_cursor_companion_snapshot")
+      : { phase: "hidden" },
+  showMainWindow: async (): Promise<void> =>
+    inTauri() ? invoke("show_main_window") : undefined,
+  hideMainWindow: async (): Promise<void> =>
+    inTauri() ? invoke("hide_main_window") : undefined,
+  dismissCursorCompanion: async (): Promise<void> =>
+    inTauri() ? invoke("dismiss_cursor_companion") : undefined,
   resolveConfirmation: async (
     confirmationId: string,
     decision: "allow_once" | "stop",
@@ -97,15 +111,20 @@ export const desktop = {
         })
       : Promise.resolve(() => undefined),
   onGlobalShortcut: (
-    handler: (action: "ask" | "ask_release" | "dictation" | "stop") => void,
+    handler: (action: ShortcutAction) => void,
   ): Promise<UnlistenFn> =>
     inTauri()
-      ? listen<"ask" | "ask_release" | "dictation" | "stop">(
-          "global_shortcut",
-          (event) => {
-            handler(event.payload);
-          },
-        )
+      ? listen<ShortcutAction>("global_shortcut", (event) => {
+          handler(event.payload);
+        })
+      : Promise.resolve(() => undefined),
+  onCursorCompanion: (
+    handler: (snapshot: CursorCompanionSnapshot) => void,
+  ): Promise<UnlistenFn> =>
+    inTauri()
+      ? listen<CursorCompanionSnapshot>("cursor_companion_changed", (event) => {
+          handler(event.payload);
+        })
       : Promise.resolve(() => undefined),
   onOpenSettings: (handler: () => void): Promise<UnlistenFn> =>
     inTauri()

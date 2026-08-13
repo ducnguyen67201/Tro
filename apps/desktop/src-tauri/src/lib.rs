@@ -15,9 +15,25 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(AppState::new())
+        .on_window_event(|window, event| {
+            if window.label() == "main"
+                && let tauri::WindowEvent::CloseRequested { api, .. } = event
+            {
+                api.prevent_close();
+                if let Err(error) = commands::window::hide_main(window.app_handle()) {
+                    tracing::warn!(
+                        component = "window",
+                        operation = "close_to_background",
+                        error_code = "window_operation_failed",
+                        source = %error
+                    );
+                }
+            }
+        })
         .setup(|app| {
             register_shortcuts(app)?;
             services::hotkeys::build_tray(app)?;
+            services::cursor_companion::CursorCompanion::create_window(app.handle())?;
             services::overlay::create_overlays(app.handle())?;
             app.state::<AppState>().reset_after_restart();
             #[cfg(target_os = "macos")]
@@ -29,6 +45,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::assistant::get_app_snapshot,
             commands::assistant::start_assistant,
+            commands::assistant::finish_assistant,
             commands::assistant::stop_assistant,
             commands::assistant::start_dictation,
             commands::assistant::stop_dictation,
@@ -39,6 +56,10 @@ pub fn run() {
             commands::permissions::request_permission,
             commands::permissions::restart_app,
             commands::settings::update_settings,
+            commands::window::get_cursor_companion_snapshot,
+            commands::window::show_main_window,
+            commands::window::hide_main_window,
+            commands::window::dismiss_cursor_companion,
         ])
         .run(tauri::generate_context!())
         .unwrap_or_else(
@@ -62,7 +83,27 @@ fn register_shortcuts(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Er
         let action = action.to_owned();
         app.global_shortcut()
             .on_shortcut(shortcut, move |handle, _, event| {
-                if event.state == ShortcutState::Pressed {
+                if action == "ask" {
+                    let state = handle.state::<AppState>();
+                    let result = match event.state {
+                        ShortcutState::Pressed => state.cursor_companion.follow(handle),
+                        ShortcutState::Released => state.cursor_companion.anchor(handle),
+                    };
+                    if let Err(error) = result {
+                        tracing::warn!(
+                            component = "cursor_companion",
+                            operation = "shortcut_transition",
+                            error_code = "window_operation_failed",
+                            source = %error
+                        );
+                    }
+                    let emitted_action = if event.state == ShortcutState::Pressed {
+                        "ask"
+                    } else {
+                        "ask_release"
+                    };
+                    let _result = handle.emit("global_shortcut", emitted_action);
+                } else if event.state == ShortcutState::Pressed {
                     let _result = handle.emit("global_shortcut", action.clone());
                 }
             })?;

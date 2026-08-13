@@ -33,7 +33,7 @@ impl AssistantState {
         let next = match (self, event) {
             (Self::Idle, AssistantEvent::Start) => Self::Capturing,
             (Self::Capturing, AssistantEvent::Captured) => Self::Listening,
-            (Self::Listening, AssistantEvent::Heard) => Self::Thinking,
+            (Self::Capturing | Self::Listening, AssistantEvent::Heard) => Self::Thinking,
             (Self::Thinking, AssistantEvent::ResponseAudio) => Self::Speaking,
             (Self::Thinking | Self::Speaking, AssistantEvent::Guidance) => Self::Guiding,
             (Self::Speaking | Self::Guiding, AssistantEvent::Complete)
@@ -50,6 +50,20 @@ impl AssistantState {
         };
         Ok(next)
     }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CursorCompanionPhase {
+    #[default]
+    Hidden,
+    Following,
+    Anchored,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct CursorCompanionSnapshot {
+    pub phase: CursorCompanionPhase,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -138,6 +152,53 @@ impl Default for AssistantUiState {
             transcript: None,
             status_vi: "Sẵn sàng".to_owned(),
             capture_active: false,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{AssistantEvent, AssistantState};
+
+    #[test]
+    fn release_can_finish_while_capture_is_running() {
+        assert_eq!(
+            AssistantState::Capturing.transition(AssistantEvent::Heard),
+            Ok(AssistantState::Thinking)
+        );
+    }
+
+    #[test]
+    fn release_can_finish_after_capture() {
+        assert_eq!(
+            AssistantState::Listening.transition(AssistantEvent::Heard),
+            Ok(AssistantState::Thinking)
+        );
+    }
+
+    #[test]
+    fn duplicate_release_is_rejected() {
+        assert!(
+            AssistantState::Thinking
+                .transition(AssistantEvent::Heard)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn stop_returns_every_active_state_to_idle() {
+        for state in [
+            AssistantState::Capturing,
+            AssistantState::Listening,
+            AssistantState::Thinking,
+            AssistantState::Speaking,
+            AssistantState::Guiding,
+            AssistantState::Failed,
+        ] {
+            assert_eq!(
+                state.transition(AssistantEvent::Stop),
+                Ok(AssistantState::Idle)
+            );
         }
     }
 }

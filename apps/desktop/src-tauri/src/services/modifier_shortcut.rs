@@ -8,7 +8,9 @@ use std::{
 };
 
 use keytap::{EventKind, Key, RecvTimeoutError, Tap};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+
+use crate::app_state::AppState;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -131,6 +133,19 @@ fn listen(tap: Arc<Tap>, stop: Arc<AtomicBool>, app: AppHandle) {
         match tap.recv_timeout(POLL_INTERVAL) {
             Ok(event) => {
                 if let Some(transition) = chord.update(event.kind) {
+                    let state = app.state::<AppState>();
+                    let companion_result = match transition {
+                        ChordTransition::Pressed => state.cursor_companion.follow(&app),
+                        ChordTransition::Released => state.cursor_companion.anchor(&app),
+                    };
+                    if let Err(error) = companion_result {
+                        tracing::warn!(
+                            component = "cursor_companion",
+                            operation = "modifier_transition",
+                            error_code = "window_operation_failed",
+                            source = %error
+                        );
+                    }
                     let action = match transition {
                         ChordTransition::Pressed => "ask",
                         ChordTransition::Released => "ask_release",
