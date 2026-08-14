@@ -150,6 +150,20 @@ fn key_pressed(key_code: u16) -> bool {
 }
 
 fn handle_transition(app: &AppHandle, transition: ChordTransition) {
+    let state = app.state::<AppState>();
+    let agent_active = {
+        let snapshot = state
+            .snapshot
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        agent_is_active(snapshot.agent)
+    };
+    if agent_active {
+        state.user_activity.record_physical_activity();
+        state.cancellation().cancel();
+        let _release = state.action_executor.release_all();
+        return;
+    }
     let action = match transition {
         ChordTransition::Pressed => "ask",
         ChordTransition::Released => "ask_release",
@@ -188,12 +202,22 @@ fn work_is_active(snapshot: &AssistantUiState) -> bool {
             | AssistantState::Thinking
             | AssistantState::Speaking
             | AssistantState::Guiding
-    ) || matches!(
-        snapshot.agent,
-        AgentState::Planning
+    ) || agent_is_active(snapshot.agent)
+}
+
+fn agent_is_active(agent: AgentState) -> bool {
+    matches!(
+        agent,
+        AgentState::ResolvingApp
+            | AgentState::AwaitingAppApproval
+            | AgentState::ActivatingApp
+            | AgentState::Planning
+            | AgentState::Validating
             | AgentState::AwaitingConfirmation
             | AgentState::Executing
+            | AgentState::Stabilizing
             | AgentState::Observing
+            | AgentState::StaleRecovery
     )
 }
 

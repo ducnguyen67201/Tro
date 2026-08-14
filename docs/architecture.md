@@ -18,6 +18,10 @@ Tro is a ports-and-adapters desktop product. React renders sanitized state; Rust
 
 Agent mode is separate: `explicit goal → capture → API action proposal → schema validation → ActionPolicy → allow / one-action confirmation / block → serialized InputBackend → new observation`. Emergency stop cancels the token, releases held inputs, clears overlays and confirmations, and never resumes after restart.
 
+Reliable computer use adds an app-scoped state machine before that input boundary: `resolve stable local app identity → local app approval → activate/verify window → exact-window observation → one observation-bound proposal → local evidence/policy → execute → adaptive stabilization → fresh observation`. Every proposal carries an `observation_id` and an application, element, or frame locator. Element IDs are ephemeral and are discarded with their observation. The API can propose actions and retain an encrypted provider continuation, but it cannot approve apps, resolve native handles, lower local risk, or execute input.
+
+`ApplicationBackend`, `ObservationBackend`, `ActionExecutor`, `UserActivityBackend`, and `ComputerUseBackend` are injected ports. Exact-window pixels and bounded accessibility content remain in memory only. When native semantic access is absent, the observation declares the degradation and coordinate fallback receives conservative local policy; it never silently becomes unrestricted global input.
+
 ## Conventions
 
 Rust libraries return typed errors and adapters do one capability. API code follows route → service → repository. Coordinators own cancellation and state. Provider types do not cross adapters. JSON and stable codes use `snake_case`; Rust/React types use `PascalCase`. Runtime paths do not use `unwrap`, `expect`, or `panic`. Test-only static invariants may use clear `expect` messages.

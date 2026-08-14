@@ -38,6 +38,15 @@ pub trait TutorProvider: Send + Sync {
     async fn complete(&self, media: TutorMedia) -> Result<TutorCompletion, ApiError>;
 }
 
+pub struct DisabledTutorProvider;
+
+#[async_trait]
+impl TutorProvider for DisabledTutorProvider {
+    async fn complete(&self, _media: TutorMedia) -> Result<TutorCompletion, ApiError> {
+        Err(ApiError::disabled("tutor"))
+    }
+}
+
 pub struct OpenRouterTutorProvider {
     client: reqwest::Client,
     api_key: Zeroizing<String>,
@@ -47,17 +56,21 @@ pub struct OpenRouterTutorProvider {
 }
 
 impl OpenRouterTutorProvider {
-    pub fn new(config: &AppConfig) -> Self {
-        Self {
+    pub fn new(config: &AppConfig) -> Result<Self, ApiError> {
+        let api_key = config
+            .openrouter_api_key
+            .as_ref()
+            .ok_or_else(|| ApiError::disabled("tutor"))?;
+        Ok(Self {
             client: reqwest::Client::new(),
-            api_key: Zeroizing::new(config.openrouter_api_key.expose().to_owned()),
+            api_key: Zeroizing::new(api_key.expose().to_owned()),
             endpoint: format!(
                 "{}/chat/completions",
                 config.openrouter_base_url.trim_end_matches('/')
             ),
             model: config.openrouter_model.clone(),
             timeout: Duration::from_secs(config.tutor_timeout_seconds),
-        }
+        })
     }
 }
 

@@ -5,9 +5,11 @@ pub mod error;
 pub mod overlay;
 
 pub use action::{
-    ActionOutcome, ActionReceipt, ActionTarget, ComputerAction, ForegroundContext, KeyCode,
-    MouseButton, NormalizedPoint, NormalizedRect, PlannedComputerAction, PolicyDecision,
-    PolicyReason, RiskTier, SecretText,
+    ActionLocator, ActionOutcome, ActionReceipt, ActionReceiptEvidence, ActionTarget,
+    ApplicationRef, CaptureScope, ComputerAction, ElementOperationKind, ForegroundContext, KeyCode,
+    MouseButton, NormalizedPoint, NormalizedRect, ObservationBinding, PlannedComputerAction,
+    PolicyDecision, PolicyReason, RiskTier, SecretText, UiElementSnapshot, UiObservationMetadata,
+    UiState,
 };
 pub use api::*;
 pub use assistant::*;

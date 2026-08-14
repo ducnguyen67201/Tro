@@ -28,6 +28,9 @@ impl InputBackend for NativeInputBackend {
         }
         let mut enigo = Enigo::new(&input_settings()).map_err(input_error)?;
         match action {
+            ComputerAction::ActivateApplication { .. } | ComputerAction::Element { .. } => {
+                return Err(unsupported_action());
+            }
             ComputerAction::Move { point } => {
                 let point = CoordinateMapper::to_physical(*point, frame);
                 enigo
@@ -207,6 +210,14 @@ fn unsupported_key() -> AppError {
     AppError::new(
         ErrorCode::UnsupportedAction,
         "Tổ hợp phím computer use chưa được hỗ trợ.",
+        false,
+    )
+}
+
+fn unsupported_action() -> AppError {
+    AppError::new(
+        ErrorCode::UnsupportedAction,
+        "Thao tác ngữ nghĩa phải đi qua bộ thực thi giao diện.",
         false,
     )
 }

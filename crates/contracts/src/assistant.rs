@@ -1,7 +1,10 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{AppError, ErrorCode};
+use crate::{
+    ApplicationRef,
+    error::{AppError, ErrorCode},
+};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -72,10 +75,18 @@ pub struct CursorCompanionSnapshot {
 pub enum AgentState {
     #[default]
     Idle,
+    ResolvingApp,
+    AwaitingAppApproval,
+    ActivatingApp,
     Planning,
+    Validating,
     AwaitingConfirmation,
     Executing,
+    Stabilizing,
     Observing,
+    StaleRecovery,
+    NeedsUser,
+    PausedByUser,
     Completed,
     Stopped,
     Failed,
@@ -97,13 +108,18 @@ pub enum AgentEvent {
 impl AgentState {
     pub fn transition(self, event: AgentEvent) -> Result<Self, AppError> {
         let next = match (self, event) {
-            (Self::Idle, AgentEvent::Start) => Self::Planning,
+            (Self::Idle, AgentEvent::Start) => Self::ResolvingApp,
+            (Self::ResolvingApp, AgentEvent::Observed) => Self::Planning,
             (Self::Planning, AgentEvent::ActionsReady)
             | (Self::AwaitingConfirmation, AgentEvent::Confirm) => Self::Executing,
             (Self::Planning, AgentEvent::ConfirmationRequired) => Self::AwaitingConfirmation,
-            (Self::Executing, AgentEvent::Executed) => Self::Observing,
-            (Self::Observing, AgentEvent::Observed) => Self::Planning,
-            (Self::Planning | Self::Observing, AgentEvent::Complete) => Self::Completed,
+            (Self::Executing, AgentEvent::Executed) => Self::Stabilizing,
+            (Self::Stabilizing | Self::Observing | Self::StaleRecovery, AgentEvent::Observed) => {
+                Self::Planning
+            }
+            (Self::Planning | Self::Observing | Self::Stabilizing, AgentEvent::Complete) => {
+                Self::Completed
+            }
             (_, AgentEvent::Stop) => Self::Stopped,
             (_, AgentEvent::Fail) => Self::Failed,
             _ => {
@@ -143,6 +159,8 @@ pub struct AssistantUiState {
     pub transcript: Option<String>,
     pub status_vi: String,
     pub capture_active: bool,
+    pub scoped_app_name: Option<String>,
+    pub agent_choices: Vec<ApplicationRef>,
 }
 
 impl Default for AssistantUiState {
@@ -153,6 +171,8 @@ impl Default for AssistantUiState {
             transcript: None,
             status_vi: "Sẵn sàng".to_owned(),
             capture_active: false,
+            scoped_app_name: None,
+            agent_choices: Vec::new(),
         }
     }
 }

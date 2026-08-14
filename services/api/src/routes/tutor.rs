@@ -137,8 +137,10 @@ fn validate_media(
         || frame.monitor_id.len() > 128
         || frame.width_px == 0
         || frame.height_px == 0
-        || frame.width_px > state.config.screenshot_max_edge_px
-        || frame.height_px > state.config.screenshot_max_edge_px
+        || frame.image_width_px == 0
+        || frame.image_height_px == 0
+        || frame.image_width_px > state.config.screenshot_max_edge_px
+        || frame.image_height_px > state.config.screenshot_max_edge_px
         || !frame.scale_factor.is_finite()
         || frame.scale_factor <= 0.0
         || frame.scale_factor > 8.0
@@ -193,6 +195,8 @@ mod tests {
                 monitor_id: "main".to_owned(),
                 width_px: 100,
                 height_px: 100,
+                image_width_px: 100,
+                image_height_px: 100,
                 origin_x_px: 0,
                 origin_y_px: 0,
                 scale_factor: 1.0,

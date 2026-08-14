@@ -2,13 +2,20 @@ use aes_gcm::{
     Aes256Gcm, KeyInit, Nonce,
     aead::{Aead, OsRng, rand_core::RngCore},
 };
-use contracts::{AgentTurnMetadata, AgentTurnResponse, CreateAgentRunMetadata, ErrorCode};
+use contracts::{
+    AgentTurnMetadata, AgentTurnResponse, CreateAgentRunMetadata, ErrorCode, PlannerStatus,
+    UiObservationMetadata,
+};
+use std::collections::HashSet;
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
 use crate::{
     error::ApiError,
     repositories::{AgentRunRecord, RunStatus},
+    services::computer_provider::{
+        ComputerProviderRequest, MAX_OBSERVATION_BYTES, MAX_OBSERVATION_ELEMENTS, validate_binding,
+    },
     state::AppState,
 };
 
@@ -18,37 +25,63 @@ pub async fn create(
     metadata: CreateAgentRunMetadata,
     screenshot: &[u8],
 ) -> Result<AgentTurnResponse, ApiError> {
+    check_enabled(state)?;
+    check_goal(&metadata.goal)?;
+    check_available_apps(&metadata.available_apps)?;
     check_media(state, &metadata.frame, screenshot)?;
+    check_observation(&metadata.observation, &metadata.frame)?;
     check_budget(state, device_id).await?;
-    let provider = state
-        .provider
-        .agent_turn(&metadata.goal, screenshot, None)
-        .await?;
-    if provider.actions.len() > 20 {
-        return Err(ApiError::invalid("Provider returned too many actions."));
-    }
+    let request = ComputerProviderRequest {
+        goal: &metadata.goal,
+        turn_number: 0,
+        observation: &metadata.observation,
+        available_apps: &metadata.available_apps,
+        receipts: &[],
+        screenshot,
+        screenshot_mime: metadata.frame.mime_type,
+        continuation: None,
+    };
+    let provider = state.computer_provider.turn(request).await?;
+    validate_provider_status(
+        &provider.status,
+        &ComputerProviderRequest {
+            goal: &metadata.goal,
+            turn_number: 0,
+            observation: &metadata.observation,
+            available_apps: &metadata.available_apps,
+            receipts: &[],
+            screenshot,
+            screenshot_mime: metadata.frame.mime_type,
+            continuation: None,
+        },
+    )?;
+    record_provider_metadata(provider.provider_kind, &provider.model);
     let run_id = Uuid::new_v4();
+    let action_count = status_action_count(&provider.status);
+    let terminal = !matches!(provider.status, PlannerStatus::Actions { .. });
     let response = AgentTurnResponse {
         run_id: run_id.to_string(),
         turn_number: 0,
-        actions: provider.actions,
-        completed: provider.completed,
-        message_vi: provider.message_vi,
+        status: provider.status,
     };
     let record = AgentRunRecord {
         id: run_id,
         device_id,
-        continuation_encrypted: encrypt_continuation(state, &provider.continuation_id)?,
-        status: if response.completed {
+        continuation_encrypted: if terminal {
+            Vec::new()
+        } else {
+            encrypt_continuation(state, &provider.continuation)?
+        },
+        status: if terminal {
             RunStatus::Completed
         } else {
             RunStatus::Active
         },
         turn_count: 1,
-        action_count: u32::try_from(response.actions.len()).unwrap_or(u32::MAX),
+        action_count,
         expires_at: OffsetDateTime::now_utc()
             + Duration::seconds(
-                i64::try_from(state.config.agent_max_seconds.min(1800)).unwrap_or(300),
+                i64::try_from(state.config.agent_max_seconds.min(1_800)).unwrap_or(300),
             ),
         last_idempotency_key: None,
         last_response: None,
@@ -74,7 +107,11 @@ pub async fn turn(
     metadata: AgentTurnMetadata,
     screenshot: &[u8],
 ) -> Result<AgentTurnResponse, ApiError> {
+    check_enabled(state)?;
+    check_goal(&metadata.goal)?;
+    check_receipts(&metadata.receipts)?;
     check_media(state, &metadata.frame, screenshot)?;
+    check_observation(&metadata.observation, &metadata.frame)?;
     let mut run = owned_active_run(state, device_id, run_id).await?;
     if run.last_idempotency_key.as_deref() == Some(idempotency_key) {
         let cached = run
@@ -95,34 +132,55 @@ pub async fn turn(
     }
     check_budget(state, device_id).await?;
     let previous = decrypt_continuation(state, &run.continuation_encrypted)?;
-    let provider = state
-        .provider
-        .agent_turn(
-            "Continue the immutable declared goal.",
+    validate_continuation_goal(&previous, &metadata.goal)?;
+    let request = ComputerProviderRequest {
+        goal: &metadata.goal,
+        turn_number: metadata.turn_number,
+        observation: &metadata.observation,
+        available_apps: &[],
+        receipts: &metadata.receipts,
+        screenshot,
+        screenshot_mime: metadata.frame.mime_type,
+        continuation: Some(&previous),
+    };
+    let provider = state.computer_provider.turn(request).await?;
+    validate_provider_status(
+        &provider.status,
+        &ComputerProviderRequest {
+            goal: &metadata.goal,
+            turn_number: metadata.turn_number,
+            observation: &metadata.observation,
+            available_apps: &[],
+            receipts: &metadata.receipts,
             screenshot,
-            Some(&previous),
-        )
-        .await?;
+            screenshot_mime: metadata.frame.mime_type,
+            continuation: Some(&previous),
+        },
+    )?;
+    record_provider_metadata(provider.provider_kind, &provider.model);
     let new_action_count = run
         .action_count
-        .saturating_add(u32::try_from(provider.actions.len()).unwrap_or(u32::MAX));
+        .saturating_add(status_action_count(&provider.status));
     if new_action_count > state.config.agent_max_actions {
         return Err(limit_error(
             ErrorCode::AgentTurnLimit,
             "Phiên đã đạt giới hạn thao tác.",
         ));
     }
+    let terminal = !matches!(provider.status, PlannerStatus::Actions { .. });
     let response = AgentTurnResponse {
         run_id: run_id.to_string(),
         turn_number: metadata.turn_number,
-        actions: provider.actions,
-        completed: provider.completed,
-        message_vi: provider.message_vi,
+        status: provider.status,
     };
-    run.continuation_encrypted = encrypt_continuation(state, &provider.continuation_id)?;
+    run.continuation_encrypted = if terminal {
+        Vec::new()
+    } else {
+        encrypt_continuation(state, &provider.continuation)?
+    };
     run.turn_count = run.turn_count.saturating_add(1);
     run.action_count = new_action_count;
-    run.status = if response.completed {
+    run.status = if terminal {
         RunStatus::Completed
     } else {
         RunStatus::Active
@@ -154,11 +212,54 @@ pub async fn stop(state: &AppState, device_id: Uuid, run_id: Uuid) -> Result<(),
     }
     run.status = RunStatus::Stopped;
     run.continuation_encrypted.clear();
+    run.last_response = None;
+    run.last_idempotency_key = None;
     state
         .repository
         .update_run(run)
         .await
         .map_err(|_| ApiError::provider())
+}
+
+fn validate_provider_status(
+    status: &PlannerStatus,
+    request: &ComputerProviderRequest<'_>,
+) -> Result<(), ApiError> {
+    match status {
+        PlannerStatus::Actions { actions } if actions.len() == 1 => {
+            validate_binding(&actions[0], request)
+        }
+        PlannerStatus::Actions { .. } => Err(ApiError::invalid(
+            "Provider must return exactly one bound action.",
+        )),
+        PlannerStatus::Completed { message_vi } if !message_vi.trim().is_empty() => Ok(()),
+        PlannerStatus::NeedsUser { message_vi, .. } if !message_vi.trim().is_empty() => Ok(()),
+        _ => Err(ApiError::invalid("Provider status is incomplete.")),
+    }
+}
+
+fn status_action_count(status: &PlannerStatus) -> u32 {
+    match status {
+        PlannerStatus::Actions { actions } => u32::try_from(actions.len()).unwrap_or(u32::MAX),
+        PlannerStatus::Completed { .. } | PlannerStatus::NeedsUser { .. } => 0,
+    }
+}
+
+fn validate_continuation_goal(value: &str, goal: &str) -> Result<(), ApiError> {
+    if !(3..=500).contains(&goal.len()) {
+        return Err(ApiError::invalid("Goal is outside safe bounds."));
+    }
+    let parsed: serde_json::Value =
+        serde_json::from_str(value).map_err(|_| ApiError::invalid("Continuation is invalid."))?;
+    let expected = parsed
+        .get("goal_hash")
+        .and_then(serde_json::Value::as_str)
+        .filter(|hash| hash.len() == 64)
+        .ok_or_else(|| ApiError::invalid("Continuation has no immutable goal binding."))?;
+    if expected != blake3::hash(goal.as_bytes()).to_hex().as_str() {
+        return Err(ApiError::invalid("Goal changed during the run."));
+    }
+    Ok(())
 }
 
 async fn owned_active_run(
@@ -182,9 +283,6 @@ async fn owned_active_run(
 }
 
 async fn check_budget(state: &AppState, device_id: Uuid) -> Result<(), ApiError> {
-    if !state.config.agent_enabled {
-        return Err(ApiError::disabled("agent"));
-    }
     let usage = state
         .repository
         .usage_today(device_id)
@@ -201,19 +299,132 @@ async fn check_budget(state: &AppState, device_id: Uuid) -> Result<(), ApiError>
     Ok(())
 }
 
+fn check_enabled(state: &AppState) -> Result<(), ApiError> {
+    if !state.config.agent_enabled || !state.config.reliable_computer_use_enabled {
+        return Err(ApiError::disabled("reliable_computer_use"));
+    }
+    Ok(())
+}
+
 fn check_media(
     state: &AppState,
     frame: &contracts::ScreenFrameMeta,
     screenshot: &[u8],
 ) -> Result<(), ApiError> {
+    let mime_matches = match frame.mime_type {
+        contracts::ImageMime::Jpeg => screenshot.starts_with(&[0xff, 0xd8, 0xff]),
+        contracts::ImageMime::Png => screenshot.starts_with(b"\x89PNG\r\n\x1a\n"),
+    };
     if screenshot.is_empty()
         || screenshot.len() > state.config.screenshot_max_bytes
-        || frame.width_px > state.config.screenshot_max_edge_px
-        || frame.height_px > state.config.screenshot_max_edge_px
+        || frame.image_width_px > state.config.screenshot_max_edge_px
+        || frame.image_height_px > state.config.screenshot_max_edge_px
+        || frame.image_width_px == 0
+        || frame.image_height_px == 0
+        || frame.width_px == 0
+        || frame.height_px == 0
+        || !mime_matches
     {
         return Err(ApiError::invalid("Ảnh màn hình vượt giới hạn an toàn."));
     }
     Ok(())
+}
+
+fn check_observation(
+    observation: &UiObservationMetadata,
+    frame: &contracts::ScreenFrameMeta,
+) -> Result<(), ApiError> {
+    let bytes = serde_json::to_vec(observation)
+        .map_err(|_| ApiError::invalid("Observation is invalid."))?;
+    let mut element_ids = HashSet::new();
+    let elements_valid = observation.elements.iter().all(|element| {
+        !element.element_id.is_empty()
+            && element.element_id.len() <= 64
+            && element_ids.insert(element.element_id.as_str())
+            && element.role.expose().len() <= 128
+            && element
+                .name
+                .as_ref()
+                .is_none_or(|value| value.expose().len() <= 512)
+            && element
+                .value
+                .as_ref()
+                .is_none_or(|value| value.expose().len() <= 2_000)
+            && element.states.len() <= 16
+            && element.operations.len() <= 16
+            && element.children.len() <= 64
+            && element
+                .children
+                .iter()
+                .all(|child| !child.is_empty() && child.len() <= 64)
+    });
+    let children_known = observation.elements.iter().all(|element| {
+        element
+            .children
+            .iter()
+            .all(|child| element_ids.contains(child.as_str()))
+    });
+    if bytes.len() > MAX_OBSERVATION_BYTES
+        || observation.elements.len() > MAX_OBSERVATION_ELEMENTS
+        || observation.binding.observation_id.is_empty()
+        || observation.binding.observation_id.len() > 64
+        || observation.binding.app_id.is_empty()
+        || observation.binding.app_id.len() > 200
+        || observation.binding.layout_generation != frame.layout_generation
+        || !elements_valid
+        || !children_known
+    {
+        return Err(ApiError::invalid("Observation exceeds safe bounds."));
+    }
+    Ok(())
+}
+
+fn check_goal(goal: &str) -> Result<(), ApiError> {
+    if (3..=500).contains(&goal.len()) {
+        Ok(())
+    } else {
+        Err(ApiError::invalid("Goal is outside safe bounds."))
+    }
+}
+
+fn check_available_apps(apps: &[contracts::ApplicationRef]) -> Result<(), ApiError> {
+    if apps.len() <= 256
+        && apps.iter().all(|app| {
+            !app.app_id.is_empty()
+                && app.app_id.len() <= 200
+                && !app.display_name.is_empty()
+                && app.display_name.len() <= 256
+                && app.identity_summary.len() <= 256
+        })
+    {
+        Ok(())
+    } else {
+        Err(ApiError::invalid(
+            "Application catalog exceeds safe bounds.",
+        ))
+    }
+}
+
+fn check_receipts(receipts: &[contracts::ActionReceipt]) -> Result<(), ApiError> {
+    if receipts.len() <= 4
+        && receipts.iter().all(|receipt| {
+            !receipt.observation_id.is_empty()
+                && receipt.observation_id.len() <= 64
+                && receipt
+                    .error_code
+                    .as_ref()
+                    .is_none_or(|error| error.len() <= 64)
+                && receipt
+                    .evidence
+                    .resolved_role_category
+                    .as_ref()
+                    .is_none_or(|role| role.len() <= 128)
+        })
+    {
+        Ok(())
+    } else {
+        Err(ApiError::invalid("Action receipts exceed safe bounds."))
+    }
 }
 
 fn cipher(state: &AppState) -> Result<Aes256Gcm, ApiError> {
@@ -238,6 +449,15 @@ fn decrypt_continuation(state: &AppState, value: &[u8]) -> Result<String, ApiErr
         .decrypt(Nonce::from_slice(nonce), encrypted)
         .map_err(|_| ApiError::provider())?;
     String::from_utf8(plain).map_err(|_| ApiError::provider())
+}
+
+fn record_provider_metadata(provider_kind: &str, model: &str) {
+    tracing::info!(
+        component = "computer_provider",
+        operation = "turn_complete",
+        provider_kind,
+        model,
+    );
 }
 
 fn limit_error(code: ErrorCode, message: &str) -> ApiError {

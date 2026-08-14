@@ -5,6 +5,7 @@ import { defaultAskShortcut, desktop } from "../../lib/tauri";
 import { PrivacyPanel } from "./PrivacyPanel";
 import { LlmSettings } from "./LlmSettings";
 import { ShortcutEditor } from "./ShortcutEditor";
+import { ApprovedAppsSettings } from "./ApprovedAppsSettings";
 
 const initial: AppSettings = {
   locale: "vi",
@@ -89,6 +90,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
         </section>
       ) : null}
       <LlmSettings />
+      <ApprovedAppsSettings />
       <section className="settings-section">
         <h2>Trải nghiệm</h2>
         <label className="toggle-row">

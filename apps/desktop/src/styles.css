@@ -388,6 +388,7 @@ footer button {
   background: #ece8ff;
   font-size: 12px;
   font-weight: 600;
+  flex-wrap: wrap;
 }
 .status-dot {
   width: 8px;
@@ -927,6 +928,57 @@ footer button {
 }
 .app-context {
   font-size: 11px;
+  display: grid;
+  gap: 3px;
+}
+.app-context span,
+.approval-boundary,
+.platform-limit,
+.settings-empty {
+  color: var(--muted);
+  font-size: 11px;
+}
+.approved-app-list {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 0;
+  list-style: none;
+}
+.approved-app-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.approved-app-list li span {
+  display: grid;
+  gap: 3px;
+}
+.approved-app-list small {
+  color: var(--muted);
+}
+.agent-choice-summary {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 11px;
+}
+.agent-status .agent-choice-summary button,
+.agent-status .button.subtle {
+  border: 1px solid #c7bfef;
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: #5346a9;
+  background: rgba(255, 255, 255, 0.65);
+}
+.agent-status button:focus-visible {
+  outline: 3px solid rgba(103, 87, 216, 0.35);
+  outline-offset: 2px;
 }
 .confirmation-actions {
   grid-column: 1 / -1;

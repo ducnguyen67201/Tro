@@ -1,7 +1,10 @@
 pub mod agent_loop;
+pub mod computer_provider;
 pub mod device_tokens;
 pub mod google_auth;
 pub mod openai;
+pub mod openai_responses;
+pub mod openrouter_computer;
 pub mod realtime_tokens;
 pub mod telemetry;
 pub mod tutor;

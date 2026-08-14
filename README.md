@@ -13,10 +13,12 @@ Requirements: Node.js 22+, pnpm 10.23, Rust 1.95, and Docker for API integration
 3. Run `docker compose up -d postgres` and `sqlx migrate run --source services/api/migrations`.
 4. Run `just dev` for the desktop app or `cargo run -p api` for the API.
 
+Computer use is gated twice: set `AGENT_ENABLED=true` and `RELIABLE_COMPUTER_USE_ENABLED=true`, then select exactly one server-side adapter with `COMPUTER_PROVIDER=openai_responses` or `COMPUTER_PROVIDER=openrouter_chat`. Provider keys remain in the API environment; the desktop stores only its revocable device token and optional local app approvals.
+
 Use `just check`, `just test`, `just build`, and `just eval-offline` before a pull request. Native input smoke tests are ignored unless run explicitly on a supervised fixture window.
 
 ## Safety boundary
 
-Tro cannot automate passwords, OTP/MFA, payments, banking, government, medical or legal actions, permission/security changes, elevated applications, or proctored assessments. Submit, send, upload, delete, download, settings, unknown fields, and external navigation always require a one-action confirmation.
+Tro cannot automate passwords, OTP/MFA, payments, banking, government, medical or legal actions, permission/security changes, elevated applications, proctored assessments, or permanent deletion. Submit, send, upload, download, settings, unknown fields, and external navigation require a one-action confirmation. Every action is bound to a locally approved app, exact observation, and window generation.
 
 See `docs/architecture.md`, `docs/privacy.md`, `docs/native-spike.md`, and `docs/manual-qa.md`.

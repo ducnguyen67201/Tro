@@ -149,6 +149,14 @@ pub enum KeyCode {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ComputerAction {
+    ActivateApplication {
+        app_id: String,
+    },
+    Element {
+        operation: ElementOperationKind,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        value: Option<SecretText>,
+    },
     Move {
         point: NormalizedPoint,
     },
@@ -179,6 +187,91 @@ pub enum ComputerAction {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
+pub enum ElementOperationKind {
+    Invoke,
+    Select,
+    Focus,
+    SetValue,
+    Toggle,
+    Expand,
+    Collapse,
+    ScrollIntoView,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum UiState {
+    Enabled,
+    Focused,
+    Selected,
+    Expanded,
+    Checked,
+    Visible,
+    Editable,
+    Secure,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ApplicationRef {
+    pub app_id: String,
+    pub display_name: String,
+    pub identity_summary: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ObservationBinding {
+    pub observation_id: String,
+    pub app_id: String,
+    pub window_generation: u64,
+    pub layout_generation: u64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureScope {
+    ExactWindow,
+    MonitorFallback,
+    SemanticOnly,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UiElementSnapshot {
+    /// Ephemeral identifier. It is valid only with the containing observation ID.
+    pub element_id: String,
+    pub role: SecretText,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<SecretText>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub value: Option<SecretText>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bounds: Option<NormalizedRect>,
+    pub states: Vec<UiState>,
+    pub operations: Vec<ElementOperationKind>,
+    pub children: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct UiObservationMetadata {
+    pub binding: ObservationBinding,
+    pub capture_scope: CaptureScope,
+    pub elements: Vec<UiElementSnapshot>,
+    pub truncated: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ActionLocator {
+    Application { app_id: String },
+    Element { element_id: String },
+    Frame,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum ActionTarget {
     Benign,
     KnownEditor,
@@ -202,7 +295,10 @@ pub enum ActionTarget {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct PlannedComputerAction {
+    pub observation_id: String,
+    pub locator: ActionLocator,
     pub action: ComputerAction,
     pub target: ActionTarget,
     pub description_vi: String,
@@ -231,6 +327,10 @@ pub enum PolicyReason {
     SafeguardChange,
     GoalMismatch,
     UnsupportedAction,
+    StaleObservation,
+    UnapprovedApplication,
+    DestructiveAction,
+    UserTakeover,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -252,14 +352,27 @@ pub struct ForegroundContext {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ActionReceipt {
     pub action_index: u32,
+    pub observation_id: String,
     pub outcome: ActionOutcome,
     pub error_code: Option<String>,
+    pub evidence: ActionReceiptEvidence,
+    pub fresh_observation_required: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ActionReceiptEvidence {
+    pub app_match: bool,
+    pub window_match: bool,
+    pub resolved_role_category: Option<String>,
+    pub policy_reason: Option<PolicyReason>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ActionOutcome {
     Executed,
+    Stale,
     Cancelled,
     Failed,
     Blocked,

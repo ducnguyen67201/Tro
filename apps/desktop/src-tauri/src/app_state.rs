@@ -11,17 +11,24 @@ use uuid::Uuid;
 #[cfg(target_os = "macos")]
 use crate::services::modifier_shortcut::CommandControlShortcut;
 use crate::{
-    domain::{confirmation::ConfirmationManager, settings::AppSettings},
+    domain::{
+        confirmation::{ConfirmationChoice, ConfirmationManager},
+        settings::AppSettings,
+    },
     services::{
+        action_executor::{ActionExecutor, SemanticFirstExecutor},
+        app_approvals::AppApprovalStore,
+        application::{ApplicationBackend, PlatformApplicationBackend},
         audio::{AudioBackend, CpalAudioBackend},
         auth::AuthGateway,
         capture::{CaptureBackend, XcapCaptureBackend},
-        computer_use::ComputerUseGateway,
+        computer_use::{ComputerUseBackend, ComputerUseGateway},
         cursor_companion::CursorCompanion,
-        foreground::{ForegroundContextBackend, PlatformForegroundBackend},
         input::{InputBackend, NativeInputBackend},
         llm::{LlmConfig, LlmGateway},
+        observation::{ObservationBackend, PlatformObservationBackend},
         speech::{NativeSpeechBackend, SpeechBackend},
+        user_activity::{NativeUserActivityBackend, UserActivityBackend},
     },
 };
 
@@ -34,12 +41,17 @@ pub struct AppState {
     pub pending_frame: Mutex<Option<ScreenFrame>>,
     pub frame_ready: Notify,
     pub llm: LlmGateway,
-    pub computer_use: ComputerUseGateway,
+    pub computer_use: Arc<dyn ComputerUseBackend>,
     pub llm_config: RwLock<LlmConfig>,
     pub input: Arc<dyn InputBackend>,
-    pub foreground: Arc<dyn ForegroundContextBackend>,
     pub speech: Arc<dyn SpeechBackend>,
     pub confirmation: Mutex<ConfirmationManager>,
+    pub app_approvals: Arc<AppApprovalStore>,
+    pub applications: Arc<dyn ApplicationBackend>,
+    pub observer: Arc<dyn ObservationBackend>,
+    pub action_executor: Arc<dyn ActionExecutor>,
+    pub user_activity: Arc<NativeUserActivityBackend>,
+    pub active_app_id: RwLock<Option<String>>,
     confirmation_waiter: Mutex<Option<ConfirmationWaiter>>,
     pub cursor_companion: CursorCompanion,
     authenticated: AtomicBool,
@@ -50,21 +62,39 @@ pub struct AppState {
 
 impl AppState {
     pub fn new() -> Self {
+        let capture: Arc<dyn CaptureBackend> = Arc::new(XcapCaptureBackend);
+        let input: Arc<dyn InputBackend> = Arc::new(NativeInputBackend);
+        let applications: Arc<dyn ApplicationBackend> = Arc::new(PlatformApplicationBackend);
+        let observer: Arc<dyn ObservationBackend> =
+            Arc::new(PlatformObservationBackend::new(capture.clone()));
+        let user_activity = Arc::new(NativeUserActivityBackend::default());
+        let activity_port: Arc<dyn UserActivityBackend> = user_activity.clone();
+        let action_executor: Arc<dyn ActionExecutor> = Arc::new(SemanticFirstExecutor::new(
+            applications.clone(),
+            observer.clone(),
+            input.clone(),
+            activity_port,
+        ));
         Self {
             snapshot: RwLock::new(AssistantUiState::default()),
             settings: RwLock::new(AppSettings::default()),
-            capture: Arc::new(XcapCaptureBackend),
+            capture,
             audio: Arc::new(CpalAudioBackend::default()),
             auth: AuthGateway::default(),
             pending_frame: Mutex::new(None),
             frame_ready: Notify::new(),
             llm: LlmGateway::default(),
-            computer_use: ComputerUseGateway::default(),
+            computer_use: Arc::new(ComputerUseGateway::default()),
             llm_config: RwLock::new(LlmConfig::load()),
-            input: Arc::new(NativeInputBackend),
-            foreground: Arc::new(PlatformForegroundBackend),
+            input,
             speech: Arc::new(NativeSpeechBackend::default()),
             confirmation: Mutex::new(ConfirmationManager::default()),
+            app_approvals: Arc::new(AppApprovalStore::default()),
+            applications,
+            observer,
+            action_executor,
+            user_activity,
+            active_app_id: RwLock::new(None),
             confirmation_waiter: Mutex::new(None),
             cursor_companion: CursorCompanion::default(),
             // A stored token is not trusted until the backend refreshes it.
@@ -108,6 +138,15 @@ impl AppState {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take();
+        self.confirmation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+        self.cancel_confirmation_waiter();
+        *self
+            .active_app_id
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         let _release = self.input.release_all();
         let mut snapshot = self
             .snapshot
@@ -117,7 +156,10 @@ impl AppState {
         snapshot.agent = AgentState::Idle;
     }
 
-    pub fn wait_for_confirmation(&self, id: Uuid) -> tokio::sync::oneshot::Receiver<bool> {
+    pub fn wait_for_confirmation(
+        &self,
+        id: Uuid,
+    ) -> tokio::sync::oneshot::Receiver<ConfirmationChoice> {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let previous = self
             .confirmation_waiter
@@ -125,12 +167,12 @@ impl AppState {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .replace(ConfirmationWaiter { id, sender });
         if let Some(previous) = previous {
-            let _result = previous.sender.send(false);
+            let _result = previous.sender.send(ConfirmationChoice::Stop);
         }
         receiver
     }
 
-    pub fn resolve_confirmation_waiter(&self, id: Uuid, allowed: bool) -> bool {
+    pub fn resolve_confirmation_waiter(&self, id: Uuid, decision: ConfirmationChoice) -> bool {
         let waiter = self
             .confirmation_waiter
             .lock()
@@ -140,10 +182,10 @@ impl AppState {
             return false;
         };
         if waiter.id != id {
-            let _result = waiter.sender.send(false);
+            let _result = waiter.sender.send(ConfirmationChoice::Stop);
             return false;
         }
-        waiter.sender.send(allowed).is_ok()
+        waiter.sender.send(decision).is_ok()
     }
 
     pub fn cancel_confirmation_waiter(&self) {
@@ -153,12 +195,12 @@ impl AppState {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take()
         {
-            let _result = waiter.sender.send(false);
+            let _result = waiter.sender.send(ConfirmationChoice::Stop);
         }
     }
 }
 
 struct ConfirmationWaiter {
     id: Uuid,
-    sender: tokio::sync::oneshot::Sender<bool>,
+    sender: tokio::sync::oneshot::Sender<ConfirmationChoice>,
 }

@@ -43,10 +43,16 @@ function feedbackFor(snapshot: AppSnapshot): CursorFeedback {
   if (snapshot.agent === "failed") return "failed";
   if (snapshot.agent === "completed") return "responding";
   if (
+    snapshot.agent === "resolving_app" ||
+    snapshot.agent === "awaiting_app_approval" ||
+    snapshot.agent === "activating_app" ||
     snapshot.agent === "planning" ||
+    snapshot.agent === "validating" ||
     snapshot.agent === "awaiting_confirmation" ||
     snapshot.agent === "executing" ||
-    snapshot.agent === "observing"
+    snapshot.agent === "stabilizing" ||
+    snapshot.agent === "observing" ||
+    snapshot.agent === "stale_recovery"
   ) {
     return "processing";
   }
