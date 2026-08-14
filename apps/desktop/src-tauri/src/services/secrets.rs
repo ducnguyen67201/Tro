@@ -1,20 +1,33 @@
-use contracts::{AppError, ErrorCode};
-const SERVICE: &str = "vn.tro.desktop";
-const DEVICE_TOKEN: &str = "device-token";
-const DEVICE_PUBLIC_ID: &str = "device-public-id";
+use std::sync::{Mutex, OnceLock};
+
+use contracts::AppError;
+use zeroize::Zeroizing;
+
+static DEVICE_TOKEN: OnceLock<Mutex<Option<Zeroizing<String>>>> = OnceLock::new();
+static DEVICE_PUBLIC_ID: OnceLock<String> = OnceLock::new();
+
+fn device_token_slot() -> &'static Mutex<Option<Zeroizing<String>>> {
+    DEVICE_TOKEN.get_or_init(|| Mutex::new(None))
+}
 
 pub fn save_device_token(token: &str) -> Result<(), AppError> {
-    keyring::Entry::new(SERVICE, DEVICE_TOKEN)
-        .and_then(|entry| entry.set_password(token))
-        .map_err(secret_error)
+    let mut slot = device_token_slot()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *slot = Some(Zeroizing::new(token.to_owned()));
+    Ok(())
 }
-pub fn load_device_token() -> Result<Option<zeroize::Zeroizing<String>>, AppError> {
+
+pub fn load_device_token() -> Result<Option<Zeroizing<String>>, AppError> {
     if let Ok(token) = std::env::var("TRO_DEVICE_TOKEN")
         && !token.trim().is_empty()
     {
-        return Ok(Some(zeroize::Zeroizing::new(token)));
+        return Ok(Some(Zeroizing::new(token)));
     }
-    load(DEVICE_TOKEN).map(|value| value.map(zeroize::Zeroizing::new))
+    let slot = device_token_slot()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    Ok(slot.clone())
 }
 
 pub fn device_token_configured() -> bool {
@@ -25,39 +38,38 @@ pub fn delete_device_token() -> Result<(), AppError> {
     if std::env::var("TRO_DEVICE_TOKEN").is_ok() {
         return Ok(());
     }
-    let entry = keyring::Entry::new(SERVICE, DEVICE_TOKEN).map_err(secret_error)?;
-    match entry.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(error) => Err(secret_error(error)),
-    }
+    let mut slot = device_token_slot()
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    *slot = None;
+    Ok(())
 }
 
 pub fn load_or_create_device_public_id() -> Result<String, AppError> {
-    if let Some(value) = load(DEVICE_PUBLIC_ID)?
-        && uuid::Uuid::parse_str(&value).is_ok()
-    {
-        return Ok(value);
-    }
-    let value = uuid::Uuid::new_v4().to_string();
-    keyring::Entry::new(SERVICE, DEVICE_PUBLIC_ID)
-        .and_then(|entry| entry.set_password(&value))
-        .map_err(secret_error)?;
-    Ok(value)
+    Ok(DEVICE_PUBLIC_ID
+        .get_or_init(|| uuid::Uuid::new_v4().to_string())
+        .clone())
 }
 
-fn load(account: &str) -> Result<Option<String>, AppError> {
-    let entry = keyring::Entry::new(SERVICE, account).map_err(secret_error)?;
-    match entry.get_password() {
-        Ok(value) => Ok(Some(value)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(error) => Err(secret_error(error)),
+#[cfg(test)]
+mod tests {
+    use super::{delete_device_token, load_device_token, save_device_token};
+
+    #[test]
+    fn device_session_is_kept_only_in_process_memory() {
+        delete_device_token().unwrap();
+        assert!(load_device_token().unwrap().is_none());
+
+        save_device_token("opaque-device-session").unwrap();
+        assert_eq!(
+            load_device_token()
+                .unwrap()
+                .as_ref()
+                .map(|token| token.as_str()),
+            Some("opaque-device-session")
+        );
+
+        delete_device_token().unwrap();
+        assert!(load_device_token().unwrap().is_none());
     }
-}
-fn secret_error(error: impl std::fmt::Display) -> AppError {
-    tracing::warn!(component = "secrets", operation = "credential_vault", error_code = "credential_vault_failed", source = %error);
-    AppError::new(
-        ErrorCode::Internal,
-        "Không thể dùng kho thông tin bảo mật của hệ điều hành.",
-        true,
-    )
 }

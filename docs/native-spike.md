@@ -1,6 +1,6 @@
 # Native capability spike
 
-The stable port layer and first adapters are implemented with exact pins: xcap 0.9.8, cpal 0.18.1, enigo 0.6.1, keyring 4.1.6 (`v1` only), and Tauri 2.11. The app builds capture bytes in memory, creates per-monitor click-through overlay windows, exposes push-to-talk capability, inserts Unicode through enigo, stores tokens in the OS vault, registers global shortcuts, and makes emergency stop release common modifiers/buttons.
+The stable port layer and first adapters are implemented with exact pins: xcap 0.9.8, cpal 0.18.1, enigo 0.6.1, and Tauri 2.11. The app builds capture bytes in memory, creates per-monitor click-through overlay windows, exposes push-to-talk capability, inserts Unicode through enigo, keeps the active login session only in process memory, registers global shortcuts, and makes emergency stop release common modifiers/buttons.
 
 ## Evidence status — 2026-08-13
 
