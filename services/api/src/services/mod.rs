@@ -6,5 +6,6 @@ pub mod openai;
 pub mod openai_responses;
 pub mod openrouter_computer;
 pub mod realtime_tokens;
+pub mod scale_cua;
 pub mod telemetry;
 pub mod tutor;

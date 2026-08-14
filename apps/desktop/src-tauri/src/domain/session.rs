@@ -39,6 +39,10 @@ impl AgentLimits {
         self.consecutive_stale = 0;
     }
 
+    pub fn total_stale(&self) -> u32 {
+        self.total_stale
+    }
+
     pub fn record_turn(&mut self, actions: u32) -> Result<(), AppError> {
         self.turns = self.turns.saturating_add(1);
         self.actions = self.actions.saturating_add(actions);

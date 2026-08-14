@@ -1,4 +1,4 @@
-use std::{fmt, sync::Arc};
+use std::{collections::HashSet, fmt, sync::Arc};
 
 use contracts::{
     AppError, ApplicationRef, CaptureScope, ErrorCode, ForegroundContext, ObservationBinding,
@@ -98,6 +98,16 @@ impl ObservationBackend for PlatformObservationBackend {
         })?;
         let window_id = selected.id().map_err(observation_error)?;
         let window_generation = window_generation(selected, &app.app_id)?;
+        #[cfg(target_os = "macos")]
+        let semantic_window = crate::platform::macos_computer_use::WindowGeometry {
+            x: selected.x().map_err(observation_error)?,
+            y: selected.y().map_err(observation_error)?,
+            width: selected.width().map_err(observation_error)?,
+            height: selected.height().map_err(observation_error)?,
+        };
+        #[cfg(target_os = "macos")]
+        let semantic_pid =
+            i32::try_from(selected.pid().map_err(observation_error)?).map_err(observation_error)?;
         // Lightweight samples still capture the exact window so visual-only apps
         // have a meaningful digest. They are never uploaded; only the final stable
         // full observation leaves the desktop process.
@@ -125,25 +135,88 @@ impl ObservationBackend for PlatformObservationBackend {
             window_generation,
             layout_generation,
         };
-        // Native AX/UIA snapshots populate this collection when available. Empty is
-        // an explicit semantic-degradation signal; it never grants visual autonomy.
+        #[cfg(target_os = "macos")]
+        let mut semantic =
+            crate::platform::macos_computer_use::observe_window(semantic_pid, semantic_window)
+                .map_err(|_| semantic_window_mismatch())?;
+        #[cfg(target_os = "macos")]
+        if let Some(degradation) = semantic.degradation {
+            tracing::warn!(
+                component = "observation",
+                operation = "semantic_snapshot",
+                reason_code = degradation.reason_code(),
+                element_count = semantic.elements.len()
+            );
+        }
+        #[cfg(target_os = "macos")]
+        bound_semantic_snapshot(
+            &mut semantic.elements,
+            &mut semantic.resolved,
+            &mut semantic.truncated,
+        );
+        #[cfg(target_os = "macos")]
+        let (elements, resolved, truncated) =
+            (semantic.elements, semantic.resolved, semantic.truncated);
+        #[cfg(not(target_os = "macos"))]
+        let (elements, resolved, truncated) = (Vec::new(), Vec::new(), false);
+
+        let focused_element = resolved
+            .iter()
+            .find(|element| element.states.contains(&contracts::UiState::Focused));
+        tracing::info!(
+            component = "observation",
+            operation = "semantic_mode",
+            semantic_mode = if elements.is_empty() {
+                "visual_fallback"
+            } else {
+                "ax"
+            },
+            element_count = elements.len(),
+            truncated,
+        );
         let metadata = UiObservationMetadata {
             binding: binding.clone(),
             capture_scope,
-            elements: Vec::new(),
-            truncated: false,
+            elements,
+            truncated,
         };
-        let registry = ObservationRegistry::new(binding.clone(), []);
+        let foreground_control_role = focused_element.map(|element| element.role_category.clone());
+        let foreground_secure = focused_element
+            .is_some_and(|element| element.states.contains(&contracts::UiState::Secure));
+        let registry = ObservationRegistry::new(binding.clone(), resolved);
         let foreground = ForegroundContext {
             process_hash: blake3::hash(app.app_id.as_bytes()).to_hex().to_string(),
             window_generation,
-            control_role: None,
-            is_secure: false,
+            control_role: foreground_control_role,
+            is_secure: foreground_secure,
             is_elevated: false,
         };
         Ok(Observation::from_parts(
             metadata, frame, registry, foreground,
         ))
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn bound_semantic_snapshot(
+    elements: &mut Vec<contracts::UiElementSnapshot>,
+    resolved: &mut Vec<crate::domain::observation::ResolvedElement>,
+    truncated: &mut bool,
+) {
+    const MAX_SEMANTIC_BYTES: usize = 120_000;
+    while serde_json::to_vec(&elements).is_ok_and(|bytes| bytes.len() > MAX_SEMANTIC_BYTES)
+        && !elements.is_empty()
+    {
+        elements.pop();
+        resolved.pop();
+        *truncated = true;
+    }
+    let retained = elements
+        .iter()
+        .map(|element| element.element_id.clone())
+        .collect::<HashSet<_>>();
+    for element in elements.iter_mut() {
+        element.children.retain(|child| retained.contains(child));
     }
 }
 
@@ -216,6 +289,15 @@ fn observation_error(error: impl std::fmt::Display) -> AppError {
     AppError::new(
         ErrorCode::CaptureFailed,
         "Tro chưa thể quan sát cửa sổ ứng dụng an toàn.",
+        true,
+    )
+}
+
+#[cfg(target_os = "macos")]
+fn semantic_window_mismatch() -> AppError {
+    AppError::new(
+        ErrorCode::TargetAppUnavailable,
+        "Cửa sổ Accessibility không còn khớp với cửa sổ đã chụp; Tro sẽ quan sát lại.",
         true,
     )
 }

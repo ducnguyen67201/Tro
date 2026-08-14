@@ -7,6 +7,7 @@ use contracts::{
     UiObservationMetadata,
 };
 use std::collections::HashSet;
+use std::time::Instant;
 use time::{Duration, OffsetDateTime};
 use uuid::Uuid;
 
@@ -41,6 +42,7 @@ pub async fn create(
         screenshot_mime: metadata.frame.mime_type,
         continuation: None,
     };
+    let provider_started = Instant::now();
     let provider = state.computer_provider.turn(request).await?;
     validate_provider_status(
         &provider.status,
@@ -55,7 +57,12 @@ pub async fn create(
             continuation: None,
         },
     )?;
-    record_provider_metadata(provider.provider_kind, &provider.model);
+    record_provider_metadata(
+        provider.provider_kind,
+        &provider.model,
+        provider_started.elapsed(),
+        &provider.status,
+    );
     let run_id = Uuid::new_v4();
     let action_count = status_action_count(&provider.status);
     let terminal = !matches!(provider.status, PlannerStatus::Actions { .. });
@@ -143,6 +150,7 @@ pub async fn turn(
         screenshot_mime: metadata.frame.mime_type,
         continuation: Some(&previous),
     };
+    let provider_started = Instant::now();
     let provider = state.computer_provider.turn(request).await?;
     validate_provider_status(
         &provider.status,
@@ -157,7 +165,12 @@ pub async fn turn(
             continuation: Some(&previous),
         },
     )?;
-    record_provider_metadata(provider.provider_kind, &provider.model);
+    record_provider_metadata(
+        provider.provider_kind,
+        &provider.model,
+        provider_started.elapsed(),
+        &provider.status,
+    );
     let new_action_count = run
         .action_count
         .saturating_add(status_action_count(&provider.status));
@@ -451,13 +464,59 @@ fn decrypt_continuation(state: &AppState, value: &[u8]) -> Result<String, ApiErr
     String::from_utf8(plain).map_err(|_| ApiError::provider())
 }
 
-fn record_provider_metadata(provider_kind: &str, model: &str) {
+fn record_provider_metadata(
+    provider_kind: &str,
+    model: &str,
+    latency: std::time::Duration,
+    status: &PlannerStatus,
+) {
     tracing::info!(
         component = "computer_provider",
         operation = "turn_complete",
         provider_kind,
         model,
+        latency_bucket = latency_bucket(latency),
+        action_kind = planner_action_kind(status),
+        outcome = planner_outcome(status),
     );
+}
+
+fn latency_bucket(latency: std::time::Duration) -> &'static str {
+    match latency.as_millis() {
+        0..=499 => "lt_500ms",
+        500..=1_999 => "500ms_2s",
+        2_000..=4_999 => "2s_5s",
+        5_000..=9_999 => "5s_10s",
+        _ => "gte_10s",
+    }
+}
+
+fn planner_outcome(status: &PlannerStatus) -> &'static str {
+    match status {
+        PlannerStatus::Actions { .. } => "action_proposed",
+        PlannerStatus::Completed { .. } => "completed",
+        PlannerStatus::NeedsUser { .. } => "needs_user",
+    }
+}
+
+fn planner_action_kind(status: &PlannerStatus) -> &'static str {
+    let PlannerStatus::Actions { actions } = status else {
+        return "none";
+    };
+    actions
+        .first()
+        .map_or("none", |planned| match &planned.action {
+            contracts::ComputerAction::ActivateApplication { .. } => "activate_application",
+            contracts::ComputerAction::Element { .. } => "element",
+            contracts::ComputerAction::Move { .. } => "move",
+            contracts::ComputerAction::Click { .. } => "click",
+            contracts::ComputerAction::Scroll { .. } => "scroll",
+            contracts::ComputerAction::TypeText { .. } => "type_text",
+            contracts::ComputerAction::KeyPress { .. } => "key_press",
+            contracts::ComputerAction::Drag { .. } => "drag",
+            contracts::ComputerAction::Wait { .. } => "wait",
+            contracts::ComputerAction::Capture => "capture",
+        })
 }
 
 fn limit_error(code: ErrorCode, message: &str) -> ApiError {

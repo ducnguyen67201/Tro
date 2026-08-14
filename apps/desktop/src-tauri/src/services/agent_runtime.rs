@@ -182,7 +182,7 @@ impl AgentRuntime {
         scope.bind(observation.metadata.binding.clone())?;
         ui.status(
             AgentState::Planning,
-            "Đang lập kế hoạch từ giao diện mới nhất…",
+            planning_status(&observation),
             Some(&app),
         );
         let planning_activity = self.stabilizer.activity_snapshot();
@@ -319,6 +319,21 @@ impl AgentRuntime {
                             target: planned.target,
                             evidence: &evidence,
                         },
+                    );
+                    tracing::info!(
+                        component = "agent_runtime",
+                        operation = "action_policy",
+                        semantic_mode = if evidence.visual_fallback {
+                            "visual_fallback"
+                        } else {
+                            "ax"
+                        },
+                        element_count = observation.metadata.elements.len(),
+                        truncated = observation.metadata.truncated,
+                        action_kind = action_kind(&planned.action),
+                        outcome = "validated",
+                        stale_count = scope.limits.total_stale(),
+                        confirmation_tier = risk_tier(decision.tier),
                     );
                     if decision.tier == RiskTier::Blocked {
                         return self
@@ -520,6 +535,37 @@ fn executed_receipt(
             policy_reason: Some(policy_reason),
         },
         fresh_observation_required: true,
+    }
+}
+
+fn planning_status(observation: &Observation) -> &'static str {
+    if observation.metadata.elements.is_empty() {
+        "Tro chưa đọc được cấu trúc giao diện; thao tác theo hình ảnh sẽ cần bạn xác nhận."
+    } else {
+        "Đang lập kế hoạch từ giao diện mới nhất…"
+    }
+}
+
+fn action_kind(action: &ComputerAction) -> &'static str {
+    match action {
+        ComputerAction::ActivateApplication { .. } => "activate_application",
+        ComputerAction::Element { .. } => "element",
+        ComputerAction::Move { .. } => "move",
+        ComputerAction::Click { .. } => "click",
+        ComputerAction::Scroll { .. } => "scroll",
+        ComputerAction::TypeText { .. } => "type_text",
+        ComputerAction::KeyPress { .. } => "key_press",
+        ComputerAction::Drag { .. } => "drag",
+        ComputerAction::Wait { .. } => "wait",
+        ComputerAction::Capture => "capture",
+    }
+}
+
+const fn risk_tier(tier: RiskTier) -> &'static str {
+    match tier {
+        RiskTier::Low => "low",
+        RiskTier::Confirm => "confirm",
+        RiskTier::Blocked => "blocked",
     }
 }
 

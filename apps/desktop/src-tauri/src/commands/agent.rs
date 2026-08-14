@@ -45,10 +45,8 @@ pub async fn start_agent(
     app: AppHandle,
     state: State<'_, AppState>,
     goal: String,
-    source_frame_id: Option<String>,
 ) -> Result<(), AppError> {
     crate::commands::auth::require_authentication(&app, &state)?;
-    let _source_frame_id = source_frame_id;
     run_agent_goal(&app, &state, &goal, None).await
 }
 
@@ -286,7 +284,7 @@ pub(crate) fn emergency_stop_with_state(app: &AppHandle, state: &AppState) -> Re
     state.speech.stop();
     state.cancel_confirmation_waiter();
     state
-        .pending_frame
+        .pending_capture
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .take();

@@ -30,6 +30,10 @@ pub struct ApplicationIdentityState {
 pub trait ApplicationBackend: Send + Sync {
     fn catalog(&self) -> Result<Vec<ApplicationRef>, AppError>;
 
+    fn focused_application(&self) -> Result<Option<ApplicationRef>, AppError> {
+        Ok(None)
+    }
+
     fn resolve(&self, query: &str) -> Result<ApplicationResolution, AppError> {
         Ok(resolve_application(query, &self.catalog()?))
     }
@@ -56,6 +60,33 @@ impl ApplicationBackend for PlatformApplicationBackend {
             }
         }
         Ok(by_name.into_values().collect())
+    }
+
+    fn focused_application(&self) -> Result<Option<ApplicationRef>, AppError> {
+        let windows = Window::all().map_err(application_error)?;
+        let focused = windows.into_iter().find(|window| {
+            window.is_focused().unwrap_or(false)
+                && !window.is_minimized().unwrap_or(true)
+                && window.pid().is_ok_and(|pid| pid > 0)
+        });
+        let Some(window) = focused else {
+            return Ok(None);
+        };
+        let display_name = window.app_name().map_err(application_error)?;
+        if display_name.trim().is_empty() || display_name.eq_ignore_ascii_case("Tro") {
+            return Ok(None);
+        }
+        let catalog = self.catalog()?;
+        Ok(catalog
+            .into_iter()
+            .find(|app| app.display_name.eq_ignore_ascii_case(&display_name))
+            .or_else(|| {
+                Some(ApplicationRef {
+                    app_id: running_app_id(&display_name),
+                    identity_summary: "Ứng dụng đang chạy".to_owned(),
+                    display_name,
+                })
+            }))
     }
 
     fn launch_or_activate(&self, app: &ApplicationRef) -> Result<(), AppError> {
