@@ -20,7 +20,6 @@ contracts = { path = "../../../crates/contracts", version = "=0.1.0" }
 cpal = "=0.18.1"
 enigo = "=0.6.1"
 image = { version = "=0.25.8", default-features = false, features = ["jpeg", "png"] }
-keyring = { version = "=4.1.6", default-features = false, features = ["v1"] }
 rand.workspace = true
 reqwest.workspace = true
 serde.workspace = true
