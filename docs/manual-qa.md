@@ -2,7 +2,8 @@
 
 Run on macOS 14.2+ ARM and Intel plus Windows 11 x64. Use a dedicated fixture application; never point native input smoke tests at personal applications.
 
-- Clean install opens in Vietnamese, validates an invite, and requires an honest university-student 18+ declaration.
+- Clean install opens in Vietnamese, launches Google sign-in in the system browser, returns to Tro after account selection, and restores the session after restart.
+- Cancel Google consent, let the login expire, send a callback with the wrong state, and occupy the first loopback port. Tro must fail safely, never accept a mismatched callback, and allow a clean retry.
 - Deny, grant, and revoke microphone, screen, and delayed input/accessibility permissions. Tro stays useful and explains recovery without repeated prompts.
 - Exercise silence, long speech, Vietnamese without diacritics, Northern/Central/Southern accents, and Vietnamese-English code-switching.
 - Test single monitor and mixed-DPI dual monitors including negative origin, fullscreen, Spaces/virtual desktops, monitor unplug, and layout change mid-turn.

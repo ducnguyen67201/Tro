@@ -10,7 +10,9 @@
 
 ## Device revocation
 
-Set the device status to `revoked`, revoke all device token rows, mark active agent runs stopped, and reject new secret/turn issuance immediately. The desktop returns to idle and asks for a new invite. Revocation cannot be reversed by refresh-token overlap.
+Set the device status to `revoked`, revoke all device token rows, mark active agent runs stopped, and reject new secret/turn issuance immediately. The desktop returns to idle and asks the user to sign in again. A revoked device cannot be reactivated by Google login or refresh-token overlap.
+
+Apply a per-IP edge rate limit to `/v1/auth/google/start` and `/v1/auth/google/complete`. The API also limits concurrent Google-auth requests and caps their request bodies, but the deployment edge owns abuse-rate enforcement.
 
 ## Model change control
 

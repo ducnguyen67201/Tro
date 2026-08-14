@@ -3,7 +3,11 @@ use std::sync::Arc;
 use crate::{
     config::AppConfig,
     repositories::Repository,
-    services::{openai::Provider, tutor::TutorProvider},
+    services::{
+        google_auth::{GoogleIdentityProvider, IdentityProvider},
+        openai::Provider,
+        tutor::TutorProvider,
+    },
 };
 
 #[derive(Clone)]
@@ -12,6 +16,7 @@ pub struct AppState {
     pub repository: Arc<dyn Repository>,
     pub provider: Arc<dyn Provider>,
     pub tutor_provider: Arc<dyn TutorProvider>,
+    pub identity_provider: Arc<dyn IdentityProvider>,
 }
 
 impl AppState {
@@ -26,6 +31,12 @@ impl AppState {
             repository,
             provider,
             tutor_provider,
+            identity_provider: Arc::new(GoogleIdentityProvider),
         }
+    }
+
+    pub fn with_identity_provider(mut self, identity_provider: Arc<dyn IdentityProvider>) -> Self {
+        self.identity_provider = identity_provider;
+        self
     }
 }

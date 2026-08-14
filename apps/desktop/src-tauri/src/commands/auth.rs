@@ -40,6 +40,28 @@ pub async fn sign_in_with_invite(
     Ok(snapshot)
 }
 
+#[tauri::command]
+pub async fn sign_in_with_google(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<AuthSnapshot, AppError> {
+    let config = state
+        .llm_config
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
+    let result = state.auth.sign_in_with_google(&config).await;
+    let _shown = window::show_main(&app);
+    result?;
+    state.set_authenticated(true);
+    let snapshot = AuthSnapshot {
+        authenticated: true,
+    };
+    app.emit("authentication_changed", snapshot)
+        .map_err(|_| auth_error())?;
+    Ok(snapshot)
+}
+
 pub fn require_authentication(app: &AppHandle, state: &AppState) -> Result<(), AppError> {
     if state.is_authenticated() {
         return Ok(());

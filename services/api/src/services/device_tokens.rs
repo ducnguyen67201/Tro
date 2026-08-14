@@ -136,7 +136,10 @@ pub fn bearer_value(header: Option<&str>) -> Result<&str, ApiError> {
         .ok_or_else(ApiError::unauthorized)
 }
 
-async fn issue_token(state: &AppState, device_id: Uuid) -> Result<DeviceTokenResponse, ApiError> {
+pub(crate) async fn issue_token(
+    state: &AppState,
+    device_id: Uuid,
+) -> Result<DeviceTokenResponse, ApiError> {
     let mut bytes = [0_u8; 32];
     rand::rng().fill_bytes(&mut bytes);
     let token = URL_SAFE_NO_PAD.encode(bytes);

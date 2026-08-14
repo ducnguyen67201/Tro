@@ -1,6 +1,7 @@
 use contracts::{AppError, ErrorCode};
 const SERVICE: &str = "vn.tro.desktop";
 const DEVICE_TOKEN: &str = "device-token";
+const DEVICE_PUBLIC_ID: &str = "device-public-id";
 
 pub fn save_device_token(token: &str) -> Result<(), AppError> {
     keyring::Entry::new(SERVICE, DEVICE_TOKEN)
@@ -29,6 +30,19 @@ pub fn delete_device_token() -> Result<(), AppError> {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(error) => Err(secret_error(error)),
     }
+}
+
+pub fn load_or_create_device_public_id() -> Result<String, AppError> {
+    if let Some(value) = load(DEVICE_PUBLIC_ID)?
+        && uuid::Uuid::parse_str(&value).is_ok()
+    {
+        return Ok(value);
+    }
+    let value = uuid::Uuid::new_v4().to_string();
+    keyring::Entry::new(SERVICE, DEVICE_PUBLIC_ID)
+        .and_then(|entry| entry.set_password(&value))
+        .map_err(secret_error)?;
+    Ok(value)
 }
 
 fn load(account: &str) -> Result<Option<String>, AppError> {

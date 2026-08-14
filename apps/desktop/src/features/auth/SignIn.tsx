@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { desktop } from "../../lib/tauri";
 
 interface SignInProps {
@@ -7,18 +7,15 @@ interface SignInProps {
 }
 
 export function SignIn({ checking = false, onAuthenticated }: SignInProps) {
-  const [invite, setInvite] = useState("");
-  const [ageAccepted, setAgeAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const signInWithGoogle = () => {
     if (checking || submitting) return;
     setSubmitting(true);
     setError("");
     void desktop
-      .signIn(invite, ageAccepted)
+      .signInWithGoogle()
       .then((snapshot) => {
         if (snapshot.authenticated) onAuthenticated();
       })
@@ -44,7 +41,8 @@ export function SignIn({ checking = false, onAuthenticated }: SignInProps) {
         <span className="eyebrow">Trợ lý học tập tiếng Việt</span>
         <h1 id="auth-title">Chào mừng đến Tro</h1>
         <p className="auth-intro">
-          Đăng nhập một lần để gọi Tro ở bất kỳ ứng dụng nào bằng ⌘ + ⌥.
+          Đăng nhập bằng Google một lần. Sau đó, bạn có thể gọi Tro ở bất kỳ ứng
+          dụng nào bằng ⌘ + ⌥.
         </p>
 
         {checking ? (
@@ -52,57 +50,63 @@ export function SignIn({ checking = false, onAuthenticated }: SignInProps) {
             <span aria-hidden="true" /> Đang kiểm tra phiên đăng nhập…
           </div>
         ) : (
-          <form className="auth-form" onSubmit={submit}>
-            <label htmlFor="invite">Mã truy cập</label>
-            <input
-              id="invite"
-              value={invite}
-              onChange={(event) => {
-                setInvite(event.target.value.toUpperCase());
-              }}
-              placeholder="TRO-XXXX"
-              autoCapitalize="characters"
-              autoComplete="one-time-code"
-              autoFocus
-              aria-describedby={error ? "auth-error" : "auth-code-help"}
-              aria-invalid={Boolean(error)}
-            />
-            <span id="auth-code-help" className="auth-field-help">
-              Mã được cấp bởi nhóm Tro cho bản thử nghiệm.
-            </span>
-            <label className="auth-consent">
-              <input
-                type="checkbox"
-                checked={ageAccepted}
-                onChange={(event) => {
-                  setAgeAccepted(event.target.checked);
-                }}
-              />
-              <span>Tôi là sinh viên đại học và đã đủ 18 tuổi.</span>
-            </label>
+          <div className="auth-form">
             {error ? (
               <p id="auth-error" className="auth-error" role="alert">
                 {error}
               </p>
             ) : null}
             <button
-              className="button primary wide auth-submit"
-              type="submit"
-              disabled={invite.trim().length < 4 || !ageAccepted || submitting}
+              className="auth-google"
+              type="button"
+              disabled={submitting}
+              onClick={signInWithGoogle}
             >
-              {submitting ? "Đang đăng nhập…" : "Tiếp tục"}
-              {!submitting ? <span aria-hidden="true">→</span> : null}
+              {submitting ? (
+                <span className="auth-button-spinner" aria-hidden="true" />
+              ) : (
+                <GoogleMark />
+              )}
+              {submitting
+                ? "Hoàn tất đăng nhập trong trình duyệt…"
+                : "Tiếp tục với Google"}
             </button>
-          </form>
+            <p className="auth-browser-note">
+              Tro sẽ mở trình duyệt mặc định để bạn đăng nhập an toàn.
+            </p>
+          </div>
         )}
 
         <p className="auth-privacy">
-          Phiên đăng nhập được lưu an toàn trên máy. Ảnh và âm thanh chỉ được
-          gửi khi bạn chủ động gọi Tro.
+          Tro chỉ lưu phiên thiết bị trong kho bảo mật của máy. Ảnh và âm thanh
+          chỉ được gửi khi bạn chủ động gọi Tro.
         </p>
       </section>
       <p className="auth-footer">Vietnamese-first · Riêng tư theo mặc định</p>
     </main>
+  );
+}
+
+function GoogleMark() {
+  return (
+    <svg className="google-mark" viewBox="0 0 18 18" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.797 2.715v2.258h2.909c1.702-1.567 2.684-3.875 2.684-6.613Z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.468-.806 5.956-2.182l-2.909-2.258c-.806.54-1.835.859-3.047.859-2.344 0-4.328-1.584-5.037-3.711H.956v2.332A9 9 0 0 0 9 18Z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.963 10.708A5.41 5.41 0 0 1 3.681 9c0-.593.102-1.17.282-1.708V4.96H.956A9 9 0 0 0 0 9c0 1.452.347 2.827.956 4.04l3.007-2.332Z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.58c1.321 0 2.507.455 3.441 1.346l2.581-2.581C13.464.892 11.426 0 9 0A9 9 0 0 0 .956 4.96l3.007 2.332C4.672 5.164 6.656 3.58 9 3.58Z"
+      />
+    </svg>
   );
 }
 
@@ -115,5 +119,5 @@ function authErrorMessage(reason: unknown): string {
   ) {
     return reason.message_vi;
   }
-  return "Tro chưa thể đăng nhập. Hãy kiểm tra mã và thử lại.";
+  return "Tro chưa thể đăng nhập bằng Google. Hãy thử lại.";
 }

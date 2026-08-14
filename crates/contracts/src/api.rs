@@ -24,6 +24,30 @@ pub struct DeviceTokenResponse {
     pub expires_at_unix: i64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct GoogleAuthStartRequest {
+    pub redirect_uri: String,
+    pub state: String,
+    pub nonce: String,
+    pub code_challenge: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct GoogleAuthStartResponse {
+    pub authorization_url: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub struct GoogleAuthCompleteRequest {
+    pub code: String,
+    pub code_verifier: String,
+    pub redirect_uri: String,
+    pub nonce: String,
+    pub public_id: String,
+    pub app_version: String,
+    pub platform: String,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct AuthSnapshot {
     pub authenticated: bool,

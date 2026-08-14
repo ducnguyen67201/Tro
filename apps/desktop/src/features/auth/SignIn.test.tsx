@@ -8,53 +8,43 @@ import {
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { SignIn } from "./SignIn";
 
-const { signIn } = vi.hoisted(() => ({ signIn: vi.fn() }));
+const { signInWithGoogle } = vi.hoisted(() => ({
+  signInWithGoogle: vi.fn(),
+}));
 
 vi.mock("../../lib/tauri", () => ({
-  desktop: { signIn },
+  desktop: { signInWithGoogle },
 }));
 
 beforeEach(() => {
-  signIn.mockReset();
+  signInWithGoogle.mockReset();
 });
 
 afterEach(cleanup);
 
-test("submits a real access-code login before continuing", async () => {
-  signIn.mockResolvedValue({ authenticated: true });
+test("opens Google login before continuing", async () => {
+  signInWithGoogle.mockResolvedValue({ authenticated: true });
   const authenticated = vi.fn();
   render(<SignIn onAuthenticated={authenticated} />);
 
-  fireEvent.change(screen.getByLabelText("Mã truy cập"), {
-    target: { value: "tro-test" },
-  });
-  fireEvent.click(
-    screen.getByLabelText("Tôi là sinh viên đại học và đã đủ 18 tuổi."),
-  );
-  fireEvent.click(screen.getByRole("button", { name: /Tiếp tục/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Tiếp tục với Google" }));
 
   await waitFor(() => {
-    expect(signIn).toHaveBeenCalledWith("TRO-TEST", true);
+    expect(signInWithGoogle).toHaveBeenCalledOnce();
     expect(authenticated).toHaveBeenCalledOnce();
   });
 });
 
-test("shows a localized inline login error", async () => {
-  signIn.mockRejectedValue({
-    code: "invite_invalid",
-    message_vi: "Mã mời không hợp lệ hoặc đã hết hạn.",
+test("shows a localized inline Google login error", async () => {
+  signInWithGoogle.mockRejectedValue({
+    code: "provider_unavailable",
+    message_vi: "Google đang tạm thời không phản hồi. Hãy thử lại sau.",
   });
   render(<SignIn onAuthenticated={vi.fn()} />);
 
-  fireEvent.change(screen.getByLabelText("Mã truy cập"), {
-    target: { value: "TRO-WRONG" },
-  });
-  fireEvent.click(
-    screen.getByLabelText("Tôi là sinh viên đại học và đã đủ 18 tuổi."),
-  );
-  fireEvent.click(screen.getByRole("button", { name: /Tiếp tục/ }));
+  fireEvent.click(screen.getByRole("button", { name: "Tiếp tục với Google" }));
 
   expect(await screen.findByRole("alert")).toHaveTextContent(
-    "Mã mời không hợp lệ hoặc đã hết hạn.",
+    "Google đang tạm thời không phản hồi. Hãy thử lại sau.",
   );
 });

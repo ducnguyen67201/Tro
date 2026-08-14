@@ -34,6 +34,10 @@ export const desktop = {
     inTauri()
       ? invoke<AuthSnapshot>("get_auth_snapshot")
       : { authenticated: false },
+  signInWithGoogle: async (): Promise<AuthSnapshot> =>
+    inTauri()
+      ? invoke<AuthSnapshot>("sign_in_with_google")
+      : { authenticated: true },
   signIn: async (
     inviteCode: string,
     acceptedAgeScope: boolean,

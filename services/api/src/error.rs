@@ -34,7 +34,7 @@ impl ApiError {
             status: StatusCode::UNAUTHORIZED,
             app: AppError::new(
                 ErrorCode::AuthExpired,
-                "Phiên thiết bị đã hết hạn. Hãy đăng nhập lại bằng mã mời.",
+                "Phiên thiết bị đã hết hạn. Hãy đăng nhập lại.",
                 false,
             ),
         }

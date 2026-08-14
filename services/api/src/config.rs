@@ -48,6 +48,8 @@ pub struct AppConfig {
     pub development_invite_code: Option<SecretValue>,
     pub device_token_hmac_key: SecretValue,
     pub invite_code_pepper: SecretValue,
+    pub google_oauth_client_id: Option<String>,
+    pub google_oauth_client_secret: Option<SecretValue>,
     pub agent_continuation_aead_key: SecretValue,
     pub bind_addr: SocketAddr,
     pub screenshot_max_bytes: usize,
@@ -85,6 +87,8 @@ impl AppConfig {
             development_invite_code: optional_secret("TRO_DEVELOPMENT_INVITE_CODE"),
             device_token_hmac_key: secret("DEVICE_TOKEN_HMAC_KEY")?,
             invite_code_pepper: secret("INVITE_CODE_PEPPER")?,
+            google_oauth_client_id: optional_value("GOOGLE_OAUTH_CLIENT_ID"),
+            google_oauth_client_secret: optional_secret("GOOGLE_OAUTH_CLIENT_SECRET"),
             agent_continuation_aead_key: secret("AGENT_CONTINUATION_AEAD_KEY")?,
             bind_addr: parsed("BIND_ADDR", "127.0.0.1:8080")?,
             screenshot_max_bytes: parsed("SCREENSHOT_MAX_BYTES", "6291456")?,
@@ -121,6 +125,8 @@ impl AppConfig {
             development_invite_code: None,
             device_token_hmac_key: SecretValue("test-hmac-key-with-at-least-32-bytes".to_owned()),
             invite_code_pepper: SecretValue("test-invite-pepper".to_owned()),
+            google_oauth_client_id: Some("test.apps.googleusercontent.com".to_owned()),
+            google_oauth_client_secret: Some(SecretValue("test-google-secret".to_owned())),
             agent_continuation_aead_key: SecretValue("01234567890123456789012345678901".to_owned()),
             bind_addr: "127.0.0.1:0".parse().expect("static socket address"),
             screenshot_max_bytes: 6_291_456,
@@ -176,6 +182,21 @@ impl AppConfig {
         if self.agent_enabled && self.agent_continuation_aead_key.expose().len() != 32 {
             return Err(ConfigError::Invalid("AGENT_CONTINUATION_AEAD_KEY"));
         }
+        match (
+            &self.google_oauth_client_id,
+            &self.google_oauth_client_secret,
+        ) {
+            (Some(client_id), client_secret)
+                if (8..=512).contains(&client_id.len())
+                    && client_id.ends_with(".apps.googleusercontent.com")
+                    && !client_id.contains(char::is_whitespace)
+                    && client_secret.as_ref().is_none_or(|secret| {
+                        (6..=512).contains(&secret.expose().len())
+                            && !secret.expose().contains(char::is_whitespace)
+                    }) => {}
+            (None, None) => {}
+            _ => return Err(ConfigError::Invalid("GOOGLE_OAUTH_CREDENTIALS")),
+        }
         if let Some(token) = &self.development_device_token
             && (self.database_url != "memory://"
                 || !self.bind_addr.ip().is_loopback()
@@ -225,6 +246,10 @@ fn optional(name: &'static str, default: &str) -> String {
         .unwrap_or_else(|| default.to_owned())
 }
 
+fn optional_value(name: &'static str) -> Option<String> {
+    env::var(name).ok().filter(|value| !value.trim().is_empty())
+}
+
 fn optional_secret(name: &'static str) -> Option<SecretValue> {
     env::var(name)
         .ok()
@@ -260,5 +285,16 @@ mod tests {
             assert!(config.validate().is_err(), "accepted {base_url}");
         }
         assert!(AppConfig::test().validate().is_ok());
+    }
+
+    #[test]
+    fn allows_google_desktop_clients_without_a_client_secret() {
+        let mut config = AppConfig::test();
+        config.google_oauth_client_secret = None;
+        assert!(config.validate().is_ok());
+
+        config.google_oauth_client_id = None;
+        config.google_oauth_client_secret = Some(super::SecretValue("orphan-secret".to_owned()));
+        assert!(config.validate().is_err());
     }
 }
