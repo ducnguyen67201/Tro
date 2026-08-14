@@ -4,12 +4,12 @@ This is an unpromoted Apple Silicon experiment, not the production serving path.
 
 ## Frozen tuple
 
-| Component | Pin | Status |
-| --- | --- | --- |
-| ScaleCUA weights | revision `2ad1314b6076591e35f299b2efed214e2454deab` | Research-use/license review open |
-| ScaleCUA tool behavior | upstream commit `3929e2fe364623153f2caa94ead71dc1aea50fb0` | Adapter protocol pinned |
-| MLX-VLM | tag/package `0.6.8`, tag commit `61990c9054f2bc7bb8f32541e3238b4a58fe64e5` | Conversion compatibility unproven |
-| Target machine | M4 Max, 48 GB unified memory | Supervised spike pending |
+| Component              | Pin                                                                        | Status                            |
+| ---------------------- | -------------------------------------------------------------------------- | --------------------------------- |
+| ScaleCUA weights       | revision `2ad1314b6076591e35f299b2efed214e2454deab`                        | Research-use/license review open  |
+| ScaleCUA tool behavior | upstream commit `3929e2fe364623153f2caa94ead71dc1aea50fb0`                 | Adapter protocol pinned           |
+| MLX-VLM                | tag/package `0.6.8`, tag commit `61990c9054f2bc7bb8f32541e3238b4a58fe64e5` | Conversion compatibility unproven |
+| Target machine         | M4 Max, 48 GB unified memory                                               | Supervised spike pending          |
 
 ## Isolated setup
 

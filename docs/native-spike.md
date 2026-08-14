@@ -16,14 +16,14 @@ The stable port layer and first adapters are implemented with exact pins: xcap 0
 
 ## App-scoped computer-use evidence — 2026-08-14
 
-| Gate                                               | macOS ARM                                                                                    | macOS Intel          | Windows 11 x64                             |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------- | ------------------------------------------ |
-| Stable app catalog and local approval              | Automated tests passed; debug app bundle built                                               | Build/manual pending | Build/manual pending                       |
-| Exact-window capture and binding                   | xcap adapter implemented; signed-device correlation pending                                  | Pending              | Pending                                    |
-| AX/UIA control view and native semantic invocation | Bounded AX adapter/native locator implemented and automated pure tests pass; signed supervised acceptance pending | Pending | Disabled until a separate UIA parity tranche |
-| Stale app/window/layout rejection                  | Fake-port trajectory implemented; native focus theft pending                                 | Pending              | Pending                                    |
-| Physical takeover p95 under 250 ms                 | Injection lease and shortcut path implemented; general pointer monitor/signed timing pending | Pending              | Pending                                    |
-| Course 5, 30 repetitions                           | Not run                                                                                      | Not run              | Not run                                    |
+| Gate                                               | macOS ARM                                                                                                         | macOS Intel          | Windows 11 x64                               |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------- | -------------------------------------------- |
+| Stable app catalog and local approval              | Automated tests passed; debug app bundle built                                                                    | Build/manual pending | Build/manual pending                         |
+| Exact-window capture and binding                   | xcap adapter implemented; signed-device correlation pending                                                       | Pending              | Pending                                      |
+| AX/UIA control view and native semantic invocation | Bounded AX adapter/native locator implemented and automated pure tests pass; signed supervised acceptance pending | Pending              | Disabled until a separate UIA parity tranche |
+| Stale app/window/layout rejection                  | Fake-port trajectory implemented; native focus theft pending                                                      | Pending              | Pending                                      |
+| Physical takeover p95 under 250 ms                 | Injection lease and shortcut path implemented; general pointer monitor/signed timing pending                      | Pending              | Pending                                      |
+| Course 5, 30 repetitions                           | Not run                                                                                                           | Not run              | Not run                                      |
 
 No release claim is made for native AX/UIA coverage or broad background control. The new runtime remains behind `RELIABLE_COMPUTER_USE_ENABLED`; enabling an invited pilot is blocked until signed hardware fills every required cell with build, OS, architecture, provider/model, fixture seed, and tester evidence.
 
