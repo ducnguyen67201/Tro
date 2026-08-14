@@ -27,7 +27,7 @@ const isMacOS = () =>
   typeof navigator !== "undefined" && /Mac/.test(navigator.userAgent);
 
 export const defaultAskShortcut = () =>
-  isMacOS() ? "Command+Option" : "CommandOrControl+Shift+Space";
+  isMacOS() ? "Command+Control" : "CommandOrControl+Shift+Space";
 
 export const desktop = {
   authSnapshot: async (): Promise<AuthSnapshot> =>

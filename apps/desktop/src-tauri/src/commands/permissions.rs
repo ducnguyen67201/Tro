@@ -28,7 +28,7 @@ pub fn restart_app(app: AppHandle) {
 fn permission_snapshot(app: &AppHandle, state: &State<'_, AppState>) -> PermissionSnapshot {
     let mut snapshot = platform::permission_snapshot(state.audio.as_ref());
     if snapshot.input_control == PermissionStatus::Granted
-        && !state.command_option_shortcut.ensure_started(app)
+        && !state.command_control_shortcut.ensure_started(app)
     {
         snapshot.input_control = PermissionStatus::RestartRequired;
     }

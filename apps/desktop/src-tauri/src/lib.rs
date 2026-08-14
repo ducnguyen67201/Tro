@@ -44,7 +44,7 @@ pub fn run() {
                 state.cursor_companion.hide(app.handle())?;
             }
             #[cfg(target_os = "macos")]
-            state.command_option_shortcut.ensure_started(app.handle());
+            state.command_control_shortcut.ensure_started(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
