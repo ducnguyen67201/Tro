@@ -1,8 +1,18 @@
 use std::collections::HashMap;
 
 use contracts::{
-    AppError, ElementOperationKind, ErrorCode, NormalizedRect, ObservationBinding, UiState,
+    ActionTarget, AppError, ElementOperationKind, ErrorCode, NormalizedRect, ObservationBinding,
+    UiState,
 };
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeElementLocator {
+    pub pid: i32,
+    pub window_bounds_fingerprint: u64,
+    pub child_path: Vec<u16>,
+    pub role_category_hash: u64,
+    pub bounds_fingerprint: u64,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResolvedElement {
@@ -11,8 +21,8 @@ pub struct ResolvedElement {
     pub bounds: Option<NormalizedRect>,
     pub states: Vec<UiState>,
     pub operations: Vec<ElementOperationKind>,
-    pub native_token: u64,
-    pub destructive_hint: bool,
+    pub native_locator: Option<NativeElementLocator>,
+    pub local_target: ActionTarget,
 }
 
 pub struct ObservationRegistry {

@@ -69,9 +69,7 @@ export const desktop = {
   stopAssistant: async (reason = "user"): Promise<void> =>
     inTauri() ? invoke("stop_assistant", { reason }) : undefined,
   startAgent: async (goal: string): Promise<void> =>
-    inTauri()
-      ? invoke("start_agent", { goal, sourceFrameId: null })
-      : undefined,
+    inTauri() ? invoke("start_agent", { goal }) : undefined,
   startAgentForApp: async (goal: string, appId: string): Promise<void> =>
     inTauri() ? invoke("start_agent_for_app", { goal, appId }) : undefined,
   emergencyStop: async (): Promise<void> =>

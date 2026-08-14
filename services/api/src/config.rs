@@ -1,4 +1,7 @@
-use std::{env, fmt, net::SocketAddr};
+use std::{
+    env, fmt,
+    net::{IpAddr, SocketAddr},
+};
 
 use thiserror::Error;
 use zeroize::Zeroize;
@@ -36,11 +39,17 @@ pub struct AppConfig {
     pub openai_api_key: Option<SecretValue>,
     pub openai_realtime_model: String,
     pub openai_computer_model: String,
+    pub openai_computer_reasoning_effort: String,
     pub openai_realtime_voice: String,
     pub openrouter_api_key: Option<SecretValue>,
     pub openrouter_base_url: String,
     pub openrouter_model: String,
     pub openrouter_computer_model: String,
+    pub scale_cua_api_key: Option<SecretValue>,
+    pub scale_cua_base_url: String,
+    pub scale_cua_allowed_host: Option<String>,
+    pub scale_cua_model: String,
+    pub scale_cua_timeout_seconds: u64,
     pub tutor_timeout_seconds: u64,
     pub tutor_audio_max_bytes: usize,
     pub tutor_enabled: bool,
@@ -71,6 +80,7 @@ pub struct AppConfig {
 pub enum ComputerProviderKind {
     OpenAiResponses,
     OpenRouterChat,
+    ScaleCua,
 }
 
 impl std::str::FromStr for ComputerProviderKind {
@@ -80,6 +90,7 @@ impl std::str::FromStr for ComputerProviderKind {
         match value {
             "openai_responses" => Ok(Self::OpenAiResponses),
             "openrouter_chat" => Ok(Self::OpenRouterChat),
+            "scale_cua" => Ok(Self::ScaleCua),
             _ => Err(()),
         }
     }
@@ -92,6 +103,10 @@ impl AppConfig {
             openai_api_key: optional_secret("OPENAI_API_KEY"),
             openai_realtime_model: optional("OPENAI_REALTIME_MODEL", "gpt-realtime"),
             openai_computer_model: optional("OPENAI_COMPUTER_MODEL", "gpt-5.6"),
+            openai_computer_reasoning_effort: optional(
+                "OPENAI_COMPUTER_REASONING_EFFORT",
+                "medium",
+            ),
             openai_realtime_voice: optional("OPENAI_REALTIME_VOICE", "marin"),
             openrouter_api_key: optional_secret("OPENROUTER_API_KEY"),
             openrouter_base_url: optional("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
@@ -100,6 +115,11 @@ impl AppConfig {
                 "OPENROUTER_COMPUTER_MODEL",
                 "google/gemini-2.5-flash",
             ),
+            scale_cua_api_key: optional_secret("SCALE_CUA_API_KEY"),
+            scale_cua_base_url: optional("SCALE_CUA_BASE_URL", "http://127.0.0.1:8000/v1"),
+            scale_cua_allowed_host: optional_value("SCALE_CUA_ALLOWED_HOST"),
+            scale_cua_model: optional("SCALE_CUA_MODEL", "scalecua"),
+            scale_cua_timeout_seconds: parsed("SCALE_CUA_TIMEOUT_SECONDS", "45")?,
             tutor_timeout_seconds: parsed("TUTOR_TIMEOUT_SECONDS", "20")?,
             tutor_audio_max_bytes: parsed("TUTOR_AUDIO_MAX_BYTES", "3145728")?,
             tutor_enabled: parsed("TUTOR_ENABLED", "true")?,
@@ -121,7 +141,7 @@ impl AppConfig {
             device_daily_agent_turns: parsed("DEVICE_DAILY_AGENT_TURNS", "100")?,
             agent_enabled: parsed("AGENT_ENABLED", "false")?,
             reliable_computer_use_enabled: parsed("RELIABLE_COMPUTER_USE_ENABLED", "false")?,
-            computer_provider: parsed("COMPUTER_PROVIDER", "openrouter_chat")?,
+            computer_provider: parsed("COMPUTER_PROVIDER", "openai_responses")?,
             realtime_enabled: parsed("REALTIME_ENABLED", "false")?,
             log_format: env::var("LOG_FORMAT").unwrap_or_else(|_| "json".to_owned()),
         };
@@ -135,11 +155,17 @@ impl AppConfig {
             openai_api_key: Some(SecretValue("test-provider-key".to_owned())),
             openai_realtime_model: "test-realtime".to_owned(),
             openai_computer_model: "test-computer".to_owned(),
+            openai_computer_reasoning_effort: "medium".to_owned(),
             openai_realtime_voice: "test-voice".to_owned(),
             openrouter_api_key: Some(SecretValue("test-openrouter-provider-key".to_owned())),
             openrouter_base_url: "https://openrouter.ai/api/v1".to_owned(),
             openrouter_model: "test/provider-model".to_owned(),
             openrouter_computer_model: "test/computer-model".to_owned(),
+            scale_cua_api_key: Some(SecretValue("test-scale-cua-key".to_owned())),
+            scale_cua_base_url: "http://127.0.0.1:8000/v1".to_owned(),
+            scale_cua_allowed_host: None,
+            scale_cua_model: "scalecua".to_owned(),
+            scale_cua_timeout_seconds: 45,
             tutor_timeout_seconds: 20,
             tutor_audio_max_bytes: 3_145_728,
             tutor_enabled: true,
@@ -182,6 +208,21 @@ impl AppConfig {
         {
             return Err(ConfigError::Missing("OPENROUTER_API_KEY"));
         }
+        let scale_cua_base_url = validate_scale_cua_url(
+            &self.scale_cua_base_url,
+            self.scale_cua_allowed_host.as_deref(),
+        )?;
+        let scale_cua_loopback = scale_cua_base_url
+            .host_str()
+            .and_then(|host| host.parse::<IpAddr>().ok())
+            .is_some_and(|address| address.is_loopback());
+        if self.agent_enabled
+            && self.computer_provider == ComputerProviderKind::ScaleCua
+            && !scale_cua_loopback
+            && self.scale_cua_api_key.is_none()
+        {
+            return Err(ConfigError::Missing("SCALE_CUA_API_KEY"));
+        }
         let base_url = url::Url::parse(&self.openrouter_base_url)
             .map_err(|_| ConfigError::Invalid("OPENROUTER_BASE_URL"))?;
         if base_url.scheme() != "https"
@@ -201,8 +242,18 @@ impl AppConfig {
         if !valid_openai_model(&self.openai_computer_model) {
             return Err(ConfigError::Invalid("OPENAI_COMPUTER_MODEL"));
         }
+        if !matches!(
+            self.openai_computer_reasoning_effort.as_str(),
+            "none" | "low" | "medium" | "high" | "xhigh" | "max"
+        ) {
+            return Err(ConfigError::Invalid("OPENAI_COMPUTER_REASONING_EFFORT"));
+        }
+        if !valid_openai_model(&self.scale_cua_model) {
+            return Err(ConfigError::Invalid("SCALE_CUA_MODEL"));
+        }
         if !(5..=60).contains(&self.tutor_timeout_seconds)
             || !(1024..=6_291_456).contains(&self.tutor_audio_max_bytes)
+            || !(5..=120).contains(&self.scale_cua_timeout_seconds)
         {
             return Err(ConfigError::Invalid("TUTOR_LIMITS"));
         }
@@ -222,6 +273,8 @@ impl AppConfig {
             key.expose().len() < 20
                 || key.expose().len() > 512
                 || key.expose().contains(char::is_whitespace)
+        }) || self.scale_cua_api_key.as_ref().is_some_and(|key| {
+            !(8..=512).contains(&key.expose().len()) || key.expose().contains(char::is_whitespace)
         }) || self.device_token_hmac_key.expose().len() < 32
             || self.invite_code_pepper.expose().len() < 16
         {
@@ -267,6 +320,42 @@ impl AppConfig {
             return Err(ConfigError::Invalid("TRO_DEVELOPMENT_INVITE_CODE"));
         }
         Ok(())
+    }
+}
+
+fn validate_scale_cua_url(
+    value: &str,
+    allowed_host: Option<&str>,
+) -> Result<url::Url, ConfigError> {
+    let url = url::Url::parse(value).map_err(|_| ConfigError::Invalid("SCALE_CUA_BASE_URL"))?;
+    let host = url
+        .host_str()
+        .ok_or(ConfigError::Invalid("SCALE_CUA_BASE_URL"))?;
+    let parsed_ip = host.parse::<IpAddr>().ok();
+    let loopback = parsed_ip.is_some_and(|address| address.is_loopback());
+    let prohibited_ip = parsed_ip.is_some_and(|address| {
+        address.is_unspecified() || address.is_multicast() || is_link_local(address)
+    });
+    let remote_host_allowed =
+        !loopback && url.scheme() == "https" && allowed_host.is_some_and(|allowed| allowed == host);
+    if url.username() != ""
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || url.path().trim_end_matches('/') != "/v1"
+        || prohibited_ip
+        || !(loopback && url.scheme() == "http" || remote_host_allowed)
+        || (loopback && allowed_host.is_some())
+    {
+        return Err(ConfigError::Invalid("SCALE_CUA_BASE_URL"));
+    }
+    Ok(url)
+}
+
+fn is_link_local(address: IpAddr) -> bool {
+    match address {
+        IpAddr::V4(address) => address.is_link_local(),
+        IpAddr::V6(address) => address.is_unicast_link_local(),
     }
 }
 
@@ -367,5 +456,49 @@ mod tests {
         assert!(openrouter.validate().is_ok());
         openrouter.openrouter_api_key = None;
         assert!(openrouter.validate().is_err());
+
+        let mut local_scale = AppConfig::test();
+        local_scale.tutor_enabled = false;
+        local_scale.realtime_enabled = false;
+        local_scale.computer_provider = ComputerProviderKind::ScaleCua;
+        local_scale.openai_api_key = None;
+        local_scale.openrouter_api_key = None;
+        local_scale.scale_cua_api_key = None;
+        assert!(local_scale.validate().is_ok());
+
+        local_scale.scale_cua_base_url = "https://gpu.example.com/v1".to_owned();
+        local_scale.scale_cua_allowed_host = Some("gpu.example.com".to_owned());
+        assert!(local_scale.validate().is_err());
+        local_scale.scale_cua_api_key = Some(super::SecretValue("remote-scale-key".to_owned()));
+        assert!(local_scale.validate().is_ok());
+    }
+
+    #[test]
+    fn scale_cua_endpoint_rejects_exfiltration_and_unsafe_hosts() {
+        for (base_url, allowed_host) in [
+            ("http://localhost:8000/v1", None),
+            ("http://0.0.0.0:8000/v1", None),
+            ("http://169.254.1.2:8000/v1", None),
+            ("http://gpu.example.com/v1", Some("gpu.example.com")),
+            (
+                "https://user:pass@gpu.example.com/v1",
+                Some("gpu.example.com"),
+            ),
+            (
+                "https://gpu.example.com/v1?target=other",
+                Some("gpu.example.com"),
+            ),
+            ("https://gpu.example.com/v1", Some("other.example.com")),
+        ] {
+            let mut config = AppConfig::test();
+            config.scale_cua_base_url = base_url.to_owned();
+            config.scale_cua_allowed_host = allowed_host.map(str::to_owned);
+            assert!(config.validate().is_err(), "accepted {base_url}");
+        }
+
+        let mut remote = AppConfig::test();
+        remote.scale_cua_base_url = "https://gpu.example.com/v1".to_owned();
+        remote.scale_cua_allowed_host = Some("gpu.example.com".to_owned());
+        assert!(remote.validate().is_ok());
     }
 }

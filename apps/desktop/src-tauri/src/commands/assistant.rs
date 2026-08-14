@@ -1,5 +1,5 @@
 use crate::{
-    app_state::AppState,
+    app_state::{AppState, AssistantCaptureContext},
     domain::error::internal,
     services::{capture::CapturePreference, llm::LlmTurnInput, overlay},
 };
@@ -30,7 +30,7 @@ pub async fn start_assistant(
     let token = state.reset_cancellation();
     state.speech.stop();
     state
-        .pending_frame
+        .pending_capture
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .take();
@@ -45,13 +45,24 @@ pub async fn start_assistant(
         y: position.y.round() as i32,
     });
     let capture = state.capture.clone();
+    let applications = state.applications.clone();
     let capture_result = tokio::task::spawn_blocking(move || {
-        capture.capture_display(CapturePreference::Cursor, cursor)
+        let source_app = applications.focused_application().unwrap_or_else(|error| {
+            tracing::warn!(
+                component = "assistant",
+                operation = "resolve_source_app",
+                error_code = %error.code.as_str()
+            );
+            None
+        });
+        capture
+            .capture_display(CapturePreference::Cursor, cursor)
+            .map(|frame| AssistantCaptureContext { frame, source_app })
     })
     .await;
     overlay::show_all(&app);
-    let frame = match capture_result {
-        Ok(Ok(frame)) => frame,
+    let capture_context = match capture_result {
+        Ok(Ok(capture_context)) => capture_context,
         Ok(Err(error)) => {
             return fail_and_show(&app, &state, error);
         }
@@ -64,9 +75,9 @@ pub async fn start_assistant(
         return Ok(());
     }
     *state
-        .pending_frame
+        .pending_capture
         .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(frame);
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(capture_context);
     state.frame_ready.notify_waiters();
     let _transitioned = set_assistant_if_current(
         &app,
@@ -106,8 +117,8 @@ pub async fn finish_assistant(
     // Dropping the input stream above is the hard push-to-talk boundary. Screen
     // capture may still be finishing, but the microphone is already closed.
     set_assistant(&app, &state, AssistantEvent::Heard, "Đang gửi đến LLM…")?;
-    let mut frame = match wait_for_pending_frame(&state).await {
-        Ok(frame) => frame,
+    let mut capture_context = match wait_for_pending_capture(&state).await {
+        Ok(capture_context) => capture_context,
         Err(error) => return fail_and_show(&app, &state, error),
     };
     let config = state
@@ -118,8 +129,8 @@ pub async fn finish_assistant(
     let token = state.cancellation();
     let input = LlmTurnInput {
         audio_wav: std::mem::take(&mut audio.wav_bytes),
-        screenshot_jpeg: std::mem::take(&mut frame.bytes),
-        frame: frame.meta.clone(),
+        screenshot_jpeg: std::mem::take(&mut capture_context.frame.bytes),
+        frame: capture_context.frame.meta.clone(),
     };
     let result = tokio::select! {
         () = token.cancelled() => return Ok(()),
@@ -137,7 +148,11 @@ pub async fn finish_assistant(
                     AssistantEvent::Complete,
                     "Đang chuyển sang computer use…",
                 )?;
-                crate::commands::agent::run_agent_goal(&app, &state, &goal, None).await
+                let source_app_id = capture_context
+                    .source_app
+                    .as_ref()
+                    .map(|source_app| source_app.app_id.as_str());
+                crate::commands::agent::run_agent_goal(&app, &state, &goal, source_app_id).await
             } else {
                 show_result_card(&app, &state);
                 crate::services::speech::speak_best_effort(state.speech.clone(), guidance).await;
@@ -164,7 +179,7 @@ pub fn stop_assistant(
     state.audio.stop();
     state.speech.stop();
     state
-        .pending_frame
+        .pending_capture
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .take();
@@ -258,7 +273,7 @@ fn fail_and_show(
     state.audio.stop();
     state.speech.stop();
     state
-        .pending_frame
+        .pending_capture
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .take();
@@ -283,20 +298,20 @@ fn show_result_card(app: &AppHandle, state: &State<'_, AppState>) {
     }
 }
 
-async fn wait_for_pending_frame(
+async fn wait_for_pending_capture(
     state: &State<'_, AppState>,
-) -> Result<contracts::ScreenFrame, AppError> {
+) -> Result<AssistantCaptureContext, AppError> {
     let cancellation = state.cancellation();
     let wait = async {
         loop {
             let notified = state.frame_ready.notified();
-            if let Some(frame) = state
-                .pending_frame
+            if let Some(capture_context) = state
+                .pending_capture
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .take()
             {
-                return Ok(frame);
+                return Ok(capture_context);
             }
             if state
                 .snapshot

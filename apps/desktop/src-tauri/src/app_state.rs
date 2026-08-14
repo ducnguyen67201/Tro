@@ -3,7 +3,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-use contracts::{AgentState, AssistantUiState, ScreenFrame};
+use contracts::{AgentState, ApplicationRef, AssistantUiState, ScreenFrame};
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -32,13 +32,18 @@ use crate::{
     },
 };
 
+pub struct AssistantCaptureContext {
+    pub frame: ScreenFrame,
+    pub source_app: Option<ApplicationRef>,
+}
+
 pub struct AppState {
     pub snapshot: RwLock<AssistantUiState>,
     pub settings: RwLock<AppSettings>,
     pub capture: Arc<dyn CaptureBackend>,
     pub audio: Arc<dyn AudioBackend>,
     pub auth: AuthGateway,
-    pub pending_frame: Mutex<Option<ScreenFrame>>,
+    pub pending_capture: Mutex<Option<AssistantCaptureContext>>,
     pub frame_ready: Notify,
     pub llm: LlmGateway,
     pub computer_use: Arc<dyn ComputerUseBackend>,
@@ -81,7 +86,7 @@ impl AppState {
             capture,
             audio: Arc::new(CpalAudioBackend::default()),
             auth: AuthGateway::default(),
-            pending_frame: Mutex::new(None),
+            pending_capture: Mutex::new(None),
             frame_ready: Notify::new(),
             llm: LlmGateway::default(),
             computer_use: Arc::new(ComputerUseGateway::default()),
@@ -134,7 +139,7 @@ impl AppState {
         self.cancellation().cancel();
         self.audio.stop();
         self.speech.stop();
-        self.pending_frame
+        self.pending_capture
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .take();

@@ -48,7 +48,8 @@ impl ActionPolicy {
                 "Trường bảo mật không bao giờ được tự động điền.",
             );
         }
-        match context.target {
+        let target = escalated_target(context.target, context.evidence.local_target);
+        match target {
             ActionTarget::Password | ActionTarget::Otp => {
                 return blocked(
                     PolicyReason::Credentials,
@@ -123,7 +124,7 @@ impl ActionPolicy {
                     operation: contracts::ElementOperationKind::SetValue,
                     ..
                 }
-        ) && (context.target != ActionTarget::KnownEditor || !context.evidence.editable)
+        ) && (target != ActionTarget::KnownEditor || !context.evidence.editable)
         {
             return confirm(
                 PolicyReason::UnknownField,
@@ -143,13 +144,44 @@ impl ActionPolicy {
         }
         PolicyDecision {
             tier: RiskTier::Low,
-            reason_code: if context.target == ActionTarget::KnownEditor {
+            reason_code: if target == ActionTarget::KnownEditor {
                 PolicyReason::KnownEditor
             } else {
                 PolicyReason::BenignNavigation
             },
             display_vi: "Thao tác ít rủi ro trong phiên agent đang hoạt động.".to_owned(),
         }
+    }
+}
+
+fn escalated_target(provider: ActionTarget, local: ActionTarget) -> ActionTarget {
+    if target_floor(local) > target_floor(provider) {
+        local
+    } else {
+        provider
+    }
+}
+
+const fn target_floor(target: ActionTarget) -> u8 {
+    match target {
+        ActionTarget::Benign | ActionTarget::KnownEditor => 0,
+        ActionTarget::UnknownField
+        | ActionTarget::Submit
+        | ActionTarget::Upload
+        | ActionTarget::Download
+        | ActionTarget::Settings
+        | ActionTarget::ExternalNavigation
+        | ActionTarget::PersonalData => 1,
+        ActionTarget::Delete
+        | ActionTarget::Password
+        | ActionTarget::Otp
+        | ActionTarget::Payment
+        | ActionTarget::Banking
+        | ActionTarget::Legal
+        | ActionTarget::Medical
+        | ActionTarget::Government
+        | ActionTarget::ProctoredAssessment
+        | ActionTarget::PermissionOrSecurity => 2,
     }
 }
 

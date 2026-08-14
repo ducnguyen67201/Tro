@@ -3,7 +3,7 @@ use std::sync::Arc;
 use api::{
     AppConfig, AppState, CloudProvider, ComputerProvider, DisabledTutorProvider,
     OpenAiResponsesComputerProvider, OpenRouterComputerProvider, OpenRouterTutorProvider,
-    Repository, TutorProvider, build_router,
+    Repository, ScaleCuaComputerProvider, TutorProvider, build_router,
     config::ComputerProviderKind,
     repositories::{MemoryRepository, PgRepository},
     services::device_tokens,
@@ -55,6 +55,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ComputerProviderKind::OpenRouterChat => {
             Arc::new(OpenRouterComputerProvider::new(&config).map_err(|_| {
                 std::io::Error::other("invalid OpenRouter computer provider configuration")
+            })?)
+        }
+        ComputerProviderKind::ScaleCua => {
+            Arc::new(ScaleCuaComputerProvider::new(&config).map_err(|_| {
+                std::io::Error::other("invalid ScaleCUA computer provider configuration")
             })?)
         }
     };

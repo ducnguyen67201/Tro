@@ -21,6 +21,25 @@ const FORBIDDEN_KEYS: &[&str] = &[
     "coordinates",
     "window_title",
 ];
+const ALLOWED_KEYS: &[&str] = &[
+    "action_kind",
+    "app_version",
+    "confirmation_tier",
+    "degradation_code",
+    "element_count",
+    "error_code",
+    "latency_bucket",
+    "model",
+    "outcome",
+    "permission",
+    "platform",
+    "policy_reason",
+    "provider_kind",
+    "semantic_mode",
+    "stale_count",
+    "status",
+    "truncated",
+];
 
 pub fn validate(batch: &TelemetryBatch) -> Result<(), ApiError> {
     if batch.events.len() > 100 {
@@ -32,7 +51,10 @@ pub fn validate(batch: &TelemetryBatch) -> Result<(), ApiError> {
         }
         for (key, value) in &event.attributes {
             let normalized = key.to_ascii_lowercase();
-            if FORBIDDEN_KEYS.iter().any(|item| normalized.contains(item)) || value.len() > 128 {
+            if !ALLOWED_KEYS.contains(&normalized.as_str())
+                || FORBIDDEN_KEYS.iter().any(|item| normalized.contains(item))
+                || value.len() > 128
+            {
                 return Err(ApiError::invalid("Telemetry contains forbidden content."));
             }
         }

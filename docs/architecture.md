@@ -14,13 +14,17 @@ Tro is a ports-and-adapters desktop product. React renders sanitized state; Rust
 
 `Google system-browser login → loopback callback → API OIDC verification → opaque device token in the OS credential vault`.
 
-`Global shortcut → Assistant state → hide overlays → in-memory capture → cpal audio → Realtime adapter → sanitized transcript / overlay event`.
+`Global shortcut → Assistant state → hide overlays → memory-only {capture, locally resolved focused app} → cpal audio → tutor adapter → guidance or computer goal`. Only the stable local app ID survives a computer-goal handoff; the monitor screenshot is never reused as an action observation. The agent still validates the catalog entry, asks app approval, activates it, and captures a fresh exact window.
 
 Agent mode is separate: `explicit goal → capture → API action proposal → schema validation → ActionPolicy → allow / one-action confirmation / block → serialized InputBackend → new observation`. Emergency stop cancels the token, releases held inputs, clears overlays and confirmations, and never resumes after restart.
 
 Reliable computer use adds an app-scoped state machine before that input boundary: `resolve stable local app identity → local app approval → activate/verify window → exact-window observation → one observation-bound proposal → local evidence/policy → execute → adaptive stabilization → fresh observation`. Every proposal carries an `observation_id` and an application, element, or frame locator. Element IDs are ephemeral and are discarded with their observation. The API can propose actions and retain an encrypted provider continuation, but it cannot approve apps, resolve native handles, lower local risk, or execute input.
 
-`ApplicationBackend`, `ObservationBackend`, `ActionExecutor`, `UserActivityBackend`, and `ComputerUseBackend` are injected ports. Exact-window pixels and bounded accessibility content remain in memory only. When native semantic access is absent, the observation declares the degradation and coordinate fallback receives conservative local policy; it never silently becomes unrestricted global input.
+`ApplicationBackend`, `ObservationBackend`, `ActionExecutor`, `UserActivityBackend`, and `ComputerUseBackend` are injected ports. On macOS, xcap PID plus exact window bounds correlates one AX window. Traversal is capped at depth 20, 800 nodes, and 64 children per node; secure values are omitted. Each public `e_N` maps only within that observation to an owned, content-free locator `{pid, window-bounds fingerprint, child-index path, role hash, bounds fingerprint}`. Execution recreates the AX root, follows the path, verifies PID/role/bounds/operation, and performs press/focus/select/set-value. It never caches AX objects across tasks. Locator mismatch produces `stale_observation` and zero input.
+
+Exact-window pixels and bounded accessibility content remain in memory only. When native semantic access is absent, the observation records a content-free degradation and coordinate fallback receives conservative local policy; it never silently becomes unrestricted global input. Local AX classifications can escalate provider risk (for example Send, Delete, or Password) but cannot lower it.
+
+The API constructs exactly one configured `ComputerProvider`: direct OpenAI Responses, explicit OpenRouter Chat, or a ScaleCUA OpenAI-compatible endpoint. Provider adapters normalize into the same one-action contract and never execute input. Provider failure is terminal for that turn—there is no router/fallback that resends screen content. OpenAI and provider secrets remain server-side; local AX handles never leave the desktop.
 
 ## Conventions
 

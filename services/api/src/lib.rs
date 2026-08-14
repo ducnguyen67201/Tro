@@ -14,6 +14,7 @@ pub use services::computer_provider::ComputerProvider;
 pub use services::openai::{CloudProvider, FakeProvider, Provider};
 pub use services::openai_responses::OpenAiResponsesComputerProvider;
 pub use services::openrouter_computer::OpenRouterComputerProvider;
+pub use services::scale_cua::ScaleCuaComputerProvider;
 pub use services::tutor::{
     DisabledTutorProvider, FakeTutorProvider, OpenRouterTutorProvider, TutorProvider,
 };

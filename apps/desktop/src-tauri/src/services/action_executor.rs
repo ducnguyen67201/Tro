@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use contracts::{
-    ActionLocator, AppError, ApplicationRef, ComputerAction, ElementOperationKind, ErrorCode,
-    NormalizedPoint, PlannedComputerAction, UiState,
+    ActionLocator, ActionTarget, AppError, ApplicationRef, ComputerAction, ElementOperationKind,
+    ErrorCode, NormalizedPoint, PlannedComputerAction, UiState,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -29,6 +29,7 @@ pub struct ResolvedActionEvidence {
     pub editable: bool,
     pub visual_fallback: bool,
     pub local_destructive: bool,
+    pub local_target: ActionTarget,
 }
 
 pub trait ActionExecutor: Send + Sync {
@@ -189,6 +190,7 @@ impl ActionExecutor for SemanticFirstExecutor {
             editable: false,
             visual_fallback: matches!(planned.locator, ActionLocator::Frame),
             local_destructive: false,
+            local_target: ActionTarget::Benign,
         };
         match (&planned.locator, &planned.action) {
             (
@@ -201,13 +203,15 @@ impl ActionExecutor for SemanticFirstExecutor {
                 evidence.editable = element.states.contains(&UiState::Editable);
                 evidence.supported_operation = element.operations.contains(operation);
                 evidence.role_category = Some(element.role_category.clone());
-                evidence.local_destructive =
-                    element.destructive_hint || destructive_role_hint(&element.role_category);
-                // Native semantic invocation is attempted by platform adapters when
-                // they provide a handle. The bounded coordinate path is explicit.
-                evidence.visual_fallback = element.native_token == 0;
+                evidence.local_target = element.local_target;
+                evidence.local_destructive = element.local_target == ActionTarget::Delete
+                    || destructive_role_hint(&element.role_category);
+                evidence.visual_fallback = element.native_locator.is_none();
                 if !evidence.supported_operation {
                     return Err(unsupported_binding());
+                }
+                if let Some(locator) = &element.native_locator {
+                    validate_native(locator, *operation)?;
                 }
             }
             (ActionLocator::Frame, action) if is_visual_action(action) => {}
@@ -247,13 +251,21 @@ impl ActionExecutor for SemanticFirstExecutor {
             }
             (ActionLocator::Element { .. }, ComputerAction::Element { operation, value }) => {
                 let element = Self::element(observation, planned)?;
-                self.execute_element_fallback(
-                    observation,
-                    element,
-                    *operation,
-                    value.as_ref(),
-                    cancellation,
-                )
+                if let Some(locator) = &element.native_locator {
+                    execute_native(
+                        locator,
+                        *operation,
+                        value.as_ref().map(contracts::SecretText::expose),
+                    )
+                } else {
+                    self.execute_element_fallback(
+                        observation,
+                        element,
+                        *operation,
+                        value.as_ref(),
+                        cancellation,
+                    )
+                }
             }
             (ActionLocator::Frame, action) => {
                 let frame = observation.frame.as_ref().ok_or_else(unsupported_binding)?;
@@ -265,6 +277,57 @@ impl ActionExecutor for SemanticFirstExecutor {
 
     fn release_all(&self) -> Result<(), AppError> {
         self.input.release_all()
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn validate_native(
+    locator: &crate::domain::observation::NativeElementLocator,
+    operation: ElementOperationKind,
+) -> Result<(), AppError> {
+    crate::platform::macos_computer_use::validate_native_operation(locator, operation)
+        .map_err(native_action_error)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn validate_native(
+    _locator: &crate::domain::observation::NativeElementLocator,
+    _operation: ElementOperationKind,
+) -> Result<(), AppError> {
+    Err(unsupported_binding())
+}
+
+#[cfg(target_os = "macos")]
+fn execute_native(
+    locator: &crate::domain::observation::NativeElementLocator,
+    operation: ElementOperationKind,
+    value: Option<&str>,
+) -> Result<(), AppError> {
+    crate::platform::macos_computer_use::execute_native_operation(locator, operation, value)
+        .map_err(native_action_error)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn execute_native(
+    _locator: &crate::domain::observation::NativeElementLocator,
+    _operation: ElementOperationKind,
+    _value: Option<&str>,
+) -> Result<(), AppError> {
+    Err(unsupported_binding())
+}
+
+#[cfg(target_os = "macos")]
+fn native_action_error(error: crate::platform::macos_computer_use::NativeActionError) -> AppError {
+    use crate::platform::macos_computer_use::NativeActionError;
+
+    match error {
+        NativeActionError::PermissionDenied => AppError::new(
+            ErrorCode::AccessibilityPermissionDenied,
+            "Tro cần quyền Trợ năng để thao tác phần tử này.",
+            true,
+        ),
+        NativeActionError::Stale => stale(),
+        NativeActionError::Unsupported => unsupported_binding(),
     }
 }
 

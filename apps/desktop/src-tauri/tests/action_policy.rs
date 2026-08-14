@@ -25,6 +25,7 @@ fn evidence() -> ResolvedActionEvidence {
         editable: true,
         visual_fallback: false,
         local_destructive: false,
+        local_target: ActionTarget::Benign,
     }
 }
 
@@ -83,4 +84,61 @@ fn delete_is_blocked_even_when_provider_calls_it_benign() {
         },
     );
     assert_eq!(decision.tier, RiskTier::Blocked);
+}
+
+#[test]
+fn local_send_requires_confirmation_when_provider_calls_it_benign() {
+    let foreground = foreground();
+    let mut evidence = evidence();
+    evidence.local_target = ActionTarget::Submit;
+    let decision = ActionPolicy::evaluate(
+        &ComputerAction::Capture,
+        &ActionContext {
+            explicit_session: true,
+            scope_matches: true,
+            app_approved: true,
+            foreground: &foreground,
+            target: ActionTarget::Benign,
+            evidence: &evidence,
+        },
+    );
+    assert_eq!(decision.tier, RiskTier::Confirm);
+}
+
+#[test]
+fn local_secure_target_blocks_when_provider_calls_it_benign() {
+    let foreground = foreground();
+    let mut evidence = evidence();
+    evidence.local_target = ActionTarget::Password;
+    let decision = ActionPolicy::evaluate(
+        &ComputerAction::Capture,
+        &ActionContext {
+            explicit_session: true,
+            scope_matches: true,
+            app_approved: true,
+            foreground: &foreground,
+            target: ActionTarget::Benign,
+            evidence: &evidence,
+        },
+    );
+    assert_eq!(decision.tier, RiskTier::Blocked);
+}
+
+#[test]
+fn local_known_editor_never_lowers_provider_unknown_field() {
+    let foreground = foreground();
+    let mut evidence = evidence();
+    evidence.local_target = ActionTarget::KnownEditor;
+    let decision = ActionPolicy::evaluate(
+        &ComputerAction::Capture,
+        &ActionContext {
+            explicit_session: true,
+            scope_matches: true,
+            app_approved: true,
+            foreground: &foreground,
+            target: ActionTarget::UnknownField,
+            evidence: &evidence,
+        },
+    );
+    assert_eq!(decision.tier, RiskTier::Confirm);
 }
