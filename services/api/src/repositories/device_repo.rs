@@ -23,6 +23,13 @@ pub trait Repository: Send + Sync {
         app_version: &str,
         platform: &str,
     ) -> Result<Option<Uuid>, sqlx::Error>;
+    async fn upsert_google_device(
+        &self,
+        subject_hmac: &str,
+        public_id_hash: &str,
+        app_version: &str,
+        platform: &str,
+    ) -> Result<Option<Uuid>, sqlx::Error>;
     async fn store_device_token(
         &self,
         device_id: Uuid,
@@ -54,6 +61,7 @@ pub trait Repository: Send + Sync {
 pub struct MemoryRepository {
     invites: Mutex<Vec<(InviteRecord, u32, u32, OffsetDateTime)>>,
     tokens: Mutex<HashMap<String, (Uuid, OffsetDateTime)>>,
+    google_devices: Mutex<HashMap<String, (String, Uuid)>>,
     runs: Mutex<HashMap<Uuid, AgentRunRecord>>,
     usage: Mutex<HashMap<Uuid, UsageSnapshot>>,
 }
@@ -131,6 +139,25 @@ impl Repository for MemoryRepository {
             .expect("test repository mutex")
             .insert(token_hmac.to_owned(), (device_id, expires_at));
         Ok(())
+    }
+
+    async fn upsert_google_device(
+        &self,
+        subject_hmac: &str,
+        public_id_hash: &str,
+        _app_version: &str,
+        _platform: &str,
+    ) -> Result<Option<Uuid>, sqlx::Error> {
+        let mut devices = self.google_devices.lock().expect("test repository mutex");
+        if let Some((stored_subject, device_id)) = devices.get(public_id_hash) {
+            return Ok((stored_subject == subject_hmac).then_some(*device_id));
+        }
+        let device_id = Uuid::new_v4();
+        devices.insert(
+            public_id_hash.to_owned(),
+            (subject_hmac.to_owned(), device_id),
+        );
+        Ok(Some(device_id))
     }
 
     async fn device_for_token(&self, token_hmac: &str) -> Result<Option<Uuid>, sqlx::Error> {
@@ -290,6 +317,40 @@ impl Repository for PgRepository {
             .execute(&self.pool)
             .await?;
         Ok(())
+    }
+
+    async fn upsert_google_device(
+        &self,
+        subject_hmac: &str,
+        public_id_hash: &str,
+        app_version: &str,
+        platform: &str,
+    ) -> Result<Option<Uuid>, sqlx::Error> {
+        let mut transaction = self.pool.begin().await?;
+        let account_id = sqlx::query_scalar::<_, Uuid>(
+            "INSERT INTO accounts (id, google_subject_hmac) VALUES ($1, $2) ON CONFLICT (google_subject_hmac) DO UPDATE SET last_login_at = now() RETURNING id",
+        )
+        .bind(Uuid::new_v4())
+        .bind(subject_hmac)
+        .fetch_one(&mut *transaction)
+        .await?;
+        let device_id = Uuid::new_v4();
+        let stored_device = sqlx::query_scalar::<_, Uuid>(
+            "INSERT INTO devices (id, account_id, public_id_hash, status, app_version, platform) VALUES ($1, $2, $3, 'active', $4, $5) ON CONFLICT (public_id_hash) DO UPDATE SET account_id = EXCLUDED.account_id, app_version = EXCLUDED.app_version, platform = EXCLUDED.platform, last_seen_at = now() WHERE devices.status = 'active' AND devices.revoked_at IS NULL AND (devices.account_id IS NULL OR devices.account_id = EXCLUDED.account_id) RETURNING id",
+        )
+        .bind(device_id)
+        .bind(account_id)
+        .bind(public_id_hash)
+        .bind(app_version)
+        .bind(platform)
+        .fetch_optional(&mut *transaction)
+        .await?;
+        if stored_device.is_none() {
+            transaction.rollback().await?;
+            return Ok(None);
+        }
+        transaction.commit().await?;
+        Ok(stored_device)
     }
 
     async fn device_for_token(&self, token_hmac: &str) -> Result<Option<Uuid>, sqlx::Error> {

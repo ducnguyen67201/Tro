@@ -55,6 +55,7 @@ pub fn run() {
             commands::assistant::start_dictation,
             commands::assistant::stop_dictation,
             commands::auth::get_auth_snapshot,
+            commands::auth::sign_in_with_google,
             commands::auth::sign_in_with_invite,
             commands::agent::start_agent,
             commands::agent::resolve_confirmation,

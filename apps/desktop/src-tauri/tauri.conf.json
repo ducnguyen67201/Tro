@@ -44,7 +44,7 @@
     "targets": "all",
     "category": "Education",
     "shortDescription": "Vietnamese-first desktop learning assistant",
-    "longDescription": "Tro helps invited Vietnamese university students understand work on their screen through voice, visual guidance, dictation, and guarded computer use.",
+    "longDescription": "Tro helps Vietnamese university students understand work on their screen through voice, visual guidance, dictation, and guarded computer use.",
     "macOS": {
       "entitlements": "entitlements.plist",
       "infoPlist": "Info.plist",

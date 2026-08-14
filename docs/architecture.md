@@ -1,15 +1,18 @@
 # Architecture
 
-Tro is a ports-and-adapters desktop product. React renders sanitized state; Rust owns assistant and agent state, permissions, native media, overlays, policy, cancellation, and input. The Axum broker protects provider credentials, validates invite-only devices, applies usage limits, and proposes—but never executes—computer actions.
+Tro is a ports-and-adapters desktop product. React renders sanitized state; Rust owns assistant and agent state, permissions, native media, overlays, policy, cancellation, and input. The Axum broker protects provider credentials, verifies Google identities, issues revocable device sessions, applies usage limits, and proposes—but never executes—computer actions.
 
 ## Trust boundaries
 
 - Webview input is untrusted and enters Rust through narrow Tauri commands with length, enum, state, and origin checks. No shell or broad filesystem capability is exposed.
 - Network requests use a revocable opaque device token. The provider API key exists only in the API process.
+- Google sign-in uses the system browser, an ephemeral IPv4 loopback listener, OAuth authorization code flow, PKCE, state, and nonce. The API validates the signed OpenID Connect token and discards Google tokens after exchanging them for a Tro device token.
 - Every pixel and every model action is untrusted. Screen content cannot alter consent, goal, policy, limits, or confirmation.
 - Logs and telemetry accept stable metadata only. Raw media, text, coordinates paired with window identity, secrets, and provider bodies are forbidden.
 
 ## Desktop flow
+
+`Google system-browser login → loopback callback → API OIDC verification → opaque device token in the OS credential vault`.
 
 `Global shortcut → Assistant state → hide overlays → in-memory capture → cpal audio → Realtime adapter → sanitized transcript / overlay event`.
 
