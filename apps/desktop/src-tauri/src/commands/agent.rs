@@ -1,29 +1,23 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-use crate::{
-    app_state::AppState,
-    domain::{error::internal, session::AgentLimits},
-    security::action_policy::{ActionContext, ActionPolicy},
-    services::{capture::CapturePreference, overlay},
-};
-use contracts::{
-    ActionOutcome, ActionReceipt, AgentEvent, AgentState, AppError, ComputerAction,
-    CoordinateMapper, ErrorCode, PhysicalPoint, PlannedComputerAction, RiskTier, ScreenFrame,
-    ScreenFrameMeta,
-};
-use serde::Deserialize;
+use async_trait::async_trait;
+use contracts::{AgentState, AppError, ApplicationRef, ErrorCode};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 use uuid::Uuid;
 
+use crate::{
+    app_state::AppState,
+    domain::{confirmation::ConfirmationChoice, error::internal},
+    services::{
+        agent_runtime::{AgentRuntime, AppApprovalDecision, RuntimeResult, RuntimeUi},
+        overlay,
+        stabilizer::Stabilizer,
+        user_activity::UserActivityBackend,
+    },
+};
+
 const CONFIRMATION_WINDOW: &str = "confirmation";
 const CONFIRMATION_TIMEOUT: Duration = Duration::from_secs(30);
-
-#[derive(Clone, Copy, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ConfirmationDecision {
-    AllowOnce,
-    Stop,
-}
 
 pub fn create_confirmation_window(app: &AppHandle) -> tauri::Result<()> {
     if app.get_webview_window(CONFIRMATION_WINDOW).is_some() {
@@ -35,7 +29,7 @@ pub fn create_confirmation_window(app: &AppHandle) -> tauri::Result<()> {
         WebviewUrl::App("index.html".into()),
     )
     .title("Tro cần xác nhận")
-    .inner_size(560.0, 340.0)
+    .inner_size(560.0, 390.0)
     .resizable(false)
     .minimizable(false)
     .maximizable(false)
@@ -55,263 +49,175 @@ pub async fn start_agent(
 ) -> Result<(), AppError> {
     crate::commands::auth::require_authentication(&app, &state)?;
     let _source_frame_id = source_frame_id;
-    run_agent_goal(&app, &state, &goal).await
+    run_agent_goal(&app, &state, &goal, None).await
 }
 
-pub async fn run_agent_goal(app: &AppHandle, state: &AppState, goal: &str) -> Result<(), AppError> {
-    let goal = goal.trim();
-    validate_goal(goal)?;
-    let foreground = state.foreground.snapshot();
-    if foreground.is_elevated {
+#[tauri::command]
+pub async fn start_agent_for_app(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    goal: String,
+    app_id: String,
+) -> Result<(), AppError> {
+    crate::commands::auth::require_authentication(&app, &state)?;
+    if app_id.is_empty() || app_id.len() > 200 {
         return Err(AppError::new(
-            ErrorCode::ElevatedTargetUnsupported,
-            "Tro không điều khiển ứng dụng chạy quyền quản trị.",
+            ErrorCode::InvalidRequest,
+            "Ứng dụng đã chọn không hợp lệ.",
             false,
         ));
     }
-    prepare_agent(app, state)?;
-    let result = run_loop(app, state, goal).await;
-    if let Err(error) = &result {
-        let authentication_expired = error.code == ErrorCode::AuthExpired;
-        let current = state
-            .snapshot
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .agent;
-        if current != AgentState::Stopped {
-            let _failed = set_agent(app, state, AgentEvent::Fail, &error.message_vi);
-        }
-        if authentication_expired {
-            crate::commands::auth::handle_auth_error(app, state, error);
-        } else {
-            let _return = state.cursor_companion.return_to_cursor(app);
-        }
-    }
-    result
+    run_agent_goal(&app, &state, &goal, Some(&app_id)).await
 }
 
-async fn run_loop(app: &AppHandle, state: &AppState, goal: &str) -> Result<(), AppError> {
+pub async fn run_agent_goal(
+    app: &AppHandle,
+    state: &AppState,
+    goal: &str,
+    requested_app_id: Option<&str>,
+) -> Result<(), AppError> {
+    let goal = goal.trim();
+    validate_goal(goal)?;
+    prepare_agent(app, state)?;
     let config = state
         .llm_config
         .read()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .clone();
-    let cancellation = state.cancellation();
-    let mut limits = AgentLimits::default();
-    let first_frame = capture_current(app, state).await?;
-    let mut action_frame_meta = first_frame.meta.clone();
-    let mut response = tokio::select! {
-        () = cancellation.cancelled() => return Err(cancelled()),
-        result = state.computer_use.create_run(&config, goal, first_frame) => result?,
-    };
-    let mut active_run = Some(response.run_id.clone());
-
-    loop {
-        if let Err(error) =
-            limits.record_turn(u32::try_from(response.actions.len()).unwrap_or(u32::MAX))
-        {
-            return stop_remote_and_error(state, &config, &mut active_run, error).await;
-        }
-        if response.completed {
-            let message_vi = response
-                .message_vi
-                .take()
-                .unwrap_or_else(|| "Tro đã hoàn thành tác vụ.".to_owned());
-            set_agent(app, state, AgentEvent::Complete, &message_vi)?;
-            crate::services::speech::speak_best_effort(state.speech.clone(), message_vi).await;
-            return Ok(());
-        }
-        if response.actions.len() != 1 {
-            return stop_remote_and_error(
-                state,
-                &config,
-                &mut active_run,
-                AppError::new(
-                    ErrorCode::ProviderProtocolError,
-                    "Computer use phải trả về đúng một thao tác mỗi lượt.",
-                    true,
-                ),
-            )
-            .await;
-        }
-
-        let planned = response.actions.remove(0);
-        let frame_meta = action_frame_meta.clone();
-        if let Err(error) = authorize_action(app, state, &planned).await {
-            return stop_remote_and_error(state, &config, &mut active_run, error).await;
-        }
-        if state
-            .snapshot
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .agent
-            == AgentState::AwaitingConfirmation
-        {
-            set_agent(
-                app,
-                state,
-                AgentEvent::Confirm,
-                "Đang thực hiện thao tác đã cho phép…",
-            )?;
-        } else {
-            set_agent(
-                app,
-                state,
-                AgentEvent::ActionsReady,
-                &planned.description_vi,
-            )?;
-        }
-
-        if let Err(error) = travel_to_action(app, state, &planned.action, &frame_meta) {
-            return stop_remote_and_error(state, &config, &mut active_run, error).await;
-        }
-        let input = state.input.clone();
-        let action = planned.action.clone();
-        let action_frame = frame_meta.clone();
-        let action_cancellation = cancellation.clone();
-        let execution = match tokio::task::spawn_blocking(move || {
-            input.execute(&action, &action_frame, &action_cancellation)
-        })
-        .await
-        {
-            Ok(execution) => execution,
-            Err(_) => {
-                return stop_remote_and_error(
-                    state,
-                    &config,
-                    &mut active_run,
-                    internal("Computer use không thể hoàn tất thao tác nhập."),
-                )
-                .await;
-            }
-        };
-        let outcome = match execution {
-            Ok(()) => ActionOutcome::Executed,
-            Err(error) => {
-                return stop_remote_and_error(state, &config, &mut active_run, error).await;
-            }
-        };
-        set_agent(app, state, AgentEvent::Executed, "Đang kiểm tra kết quả…")?;
-        let observation_delay = observation_settle_time(&planned.action);
-        tokio::select! {
-            () = cancellation.cancelled() => {
-                return stop_remote_and_error(state, &config, &mut active_run, cancelled()).await;
-            }
-            () = tokio::time::sleep(observation_delay) => {}
-        }
-        let next_frame = match capture_current(app, state).await {
-            Ok(frame) => frame,
-            Err(error) => {
-                return stop_remote_and_error(state, &config, &mut active_run, error).await;
-            }
-        };
-        action_frame_meta = next_frame.meta.clone();
-        set_agent(app, state, AgentEvent::Observed, "Đang xem màn hình mới…")?;
-        let receipts = vec![ActionReceipt {
-            action_index: 0,
-            outcome,
-            error_code: None,
-        }];
-        let next_turn = response.turn_number.saturating_add(1);
-        let next_response = tokio::select! {
-            () = cancellation.cancelled() => {
-                return stop_remote_and_error(state, &config, &mut active_run, cancelled()).await;
-            }
-            result = state.computer_use.next_turn(
-                &config,
-                &response.run_id,
-                next_turn,
-                receipts,
-                next_frame,
-            ) => result,
-        };
-        response = match next_response {
-            Ok(response) => response,
-            Err(error) => {
-                return stop_remote_and_error(state, &config, &mut active_run, error).await;
-            }
-        };
-    }
-}
-
-async fn capture_current(app: &AppHandle, state: &AppState) -> Result<ScreenFrame, AppError> {
-    overlay::hide_all(app);
-    tokio::time::sleep(Duration::from_millis(34)).await;
-    let cursor = app.cursor_position().ok().map(|position| PhysicalPoint {
-        x: position.x.round() as i32,
-        y: position.y.round() as i32,
-    });
-    let capture = state.capture.clone();
-    let result = tokio::task::spawn_blocking(move || {
-        capture.capture_display(CapturePreference::FocusedWindow, cursor)
-    })
-    .await;
-    overlay::show_all(app);
-    match result {
-        Ok(result) => result,
-        Err(_) => Err(internal("Không thể chụp màn hình cho computer use.")),
-    }
-}
-
-fn observation_settle_time(action: &ComputerAction) -> Duration {
-    const DEFAULT_SETTLE_TIME: Duration = Duration::from_millis(420);
-    const APP_LAUNCH_SETTLE_TIME: Duration = Duration::from_millis(1_500);
-
-    match action {
-        ComputerAction::KeyPress { keys } if keys.contains(&contracts::KeyCode::Enter) => {
-            APP_LAUNCH_SETTLE_TIME
-        }
-        _ => DEFAULT_SETTLE_TIME,
-    }
-}
-
-async fn authorize_action(
-    app: &AppHandle,
-    state: &AppState,
-    planned: &PlannedComputerAction,
-) -> Result<(), AppError> {
-    let foreground = state.foreground.snapshot();
-    let decision = ActionPolicy::evaluate(
-        &planned.action,
-        &ActionContext {
-            explicit_session: true,
-            goal_matches: true,
-            foreground: &foreground,
-            target: planned.target,
-        },
+    let activity: Arc<dyn UserActivityBackend> = state.user_activity.clone();
+    let runtime = AgentRuntime::new(
+        config,
+        state.applications.clone(),
+        state.app_approvals.clone(),
+        state.observer.clone(),
+        state.computer_use.clone(),
+        state.action_executor.clone(),
+        Stabilizer::new(state.applications.clone(), state.observer.clone(), activity),
     );
-    match decision.tier {
-        RiskTier::Low => Ok(()),
-        RiskTier::Blocked => Err(AppError::new(
-            ErrorCode::UnsupportedAction,
-            decision.display_vi,
-            false,
-        )),
-        RiskTier::Confirm => {
-            set_agent(
+    let ui = TauriRuntimeUi { app, state };
+    let result = runtime
+        .run_for_app(goal, requested_app_id, &ui, state.cancellation())
+        .await;
+    match result {
+        Ok(RuntimeResult::Completed(message_vi)) => {
+            crate::services::speech::speak_best_effort(state.speech.clone(), message_vi).await;
+            Ok(())
+        }
+        Ok(RuntimeResult::NeedsUser {
+            message_vi,
+            choices,
+            ..
+        }) => {
+            set_runtime_status(
                 app,
                 state,
-                AgentEvent::ConfirmationRequired,
-                "Tro đang chờ bạn xác nhận một thao tác.",
-            )?;
-            request_confirmation(app, state, planned, &foreground).await
+                AgentState::NeedsUser,
+                &message_vi,
+                None,
+                choices,
+            );
+            Ok(())
+        }
+        Ok(RuntimeResult::PausedByUser) => {
+            set_runtime_status(
+                app,
+                state,
+                AgentState::PausedByUser,
+                "Bạn đã tiếp quản — Tro đã dừng. Hãy yêu cầu lại để bắt đầu từ quan sát mới.",
+                None,
+                Vec::new(),
+            );
+            Ok(())
+        }
+        Err(error) => {
+            let next = if error.code == ErrorCode::Cancelled {
+                AgentState::Stopped
+            } else {
+                AgentState::Failed
+            };
+            set_runtime_status(app, state, next, &error.message_vi, None, Vec::new());
+            let _return = state.cursor_companion.return_to_cursor(app);
+            if error.code == ErrorCode::AuthExpired {
+                crate::commands::auth::handle_auth_error(app, state, &error);
+            }
+            Err(error)
         }
     }
 }
 
-async fn request_confirmation(
+struct TauriRuntimeUi<'a> {
+    app: &'a AppHandle,
+    state: &'a AppState,
+}
+
+#[async_trait]
+impl RuntimeUi for TauriRuntimeUi<'_> {
+    fn status(&self, state: AgentState, message_vi: &str, app: Option<&ApplicationRef>) {
+        set_runtime_status(self.app, self.state, state, message_vi, app, Vec::new());
+    }
+
+    async fn approve_app(&self, app: &ApplicationRef) -> Result<AppApprovalDecision, AppError> {
+        let request = self
+            .state
+            .confirmation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .issue_app_access(app)?;
+        let id = parse_confirmation_id(&request.confirmation_id)?;
+        let decision = show_and_wait(self.app, self.state, id, request).await?;
+        let valid = self
+            .state
+            .confirmation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .consume_app(id, app);
+        if !valid {
+            return Err(expired_confirmation());
+        }
+        Ok(match decision {
+            ConfirmationChoice::AllowOnce => AppApprovalDecision::AllowOnce,
+            ConfirmationChoice::AlwaysAllow => AppApprovalDecision::AlwaysAllow,
+            ConfirmationChoice::Stop => AppApprovalDecision::Stop,
+        })
+    }
+
+    async fn confirm_action(
+        &self,
+        scope_id: Uuid,
+        app: &ApplicationRef,
+        observation: &crate::services::observation::Observation,
+        planned: &contracts::PlannedComputerAction,
+    ) -> Result<bool, AppError> {
+        let request = self
+            .state
+            .confirmation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .issue_action(scope_id, planned, &observation.metadata.binding, app)?;
+        let id = parse_confirmation_id(&request.confirmation_id)?;
+        let decision = show_and_wait(self.app, self.state, id, request).await?;
+        if decision != ConfirmationChoice::AllowOnce {
+            return Ok(false);
+        }
+        let valid = self
+            .state
+            .confirmation
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .consume_action(id, scope_id, planned, &observation.metadata.binding);
+        if !valid {
+            return Err(expired_confirmation());
+        }
+        Ok(true)
+    }
+}
+
+async fn show_and_wait(
     app: &AppHandle,
     state: &AppState,
-    planned: &PlannedComputerAction,
-    foreground: &contracts::ForegroundContext,
-) -> Result<(), AppError> {
-    let request = state
-        .confirmation
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .issue(&planned.action, foreground)?;
-    let id = Uuid::parse_str(&request.confirmation_id)
-        .map_err(|_| internal("Không thể tạo xác nhận computer use."))?;
+    id: Uuid,
+    request: crate::domain::confirmation::ConfirmationRequest,
+) -> Result<ConfirmationChoice, AppError> {
     let receiver = state.wait_for_confirmation(id);
     let window = app
         .get_webview_window(CONFIRMATION_WINDOW)
@@ -324,136 +230,26 @@ async fn request_confirmation(
         .emit("confirmation_requested", request)
         .map_err(|_| internal("Không thể gửi yêu cầu xác nhận."))?;
     let cancellation = state.cancellation();
-    let allowed = tokio::select! {
-        () = cancellation.cancelled() => false,
+    let decision = tokio::select! {
+        () = cancellation.cancelled() => ConfirmationChoice::Stop,
         result = tokio::time::timeout(CONFIRMATION_TIMEOUT, receiver) => {
-            matches!(result, Ok(Ok(true)))
+            result.ok().and_then(Result::ok).unwrap_or(ConfirmationChoice::Stop)
         }
     };
     let _hide = window.hide();
-    if !allowed {
-        return Err(cancelled());
-    }
-    let current = state.foreground.snapshot();
-    let consumed = state
-        .confirmation
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .consume(id, &planned.action, &current);
-    if !consumed {
-        return Err(AppError::new(
-            ErrorCode::ActionRequiresConfirmation,
-            "Xác nhận đã hết hạn hoặc cửa sổ đã thay đổi.",
-            false,
-        ));
-    }
-    Ok(())
+    Ok(decision)
 }
 
-fn travel_to_action(
-    app: &AppHandle,
-    state: &AppState,
-    action: &ComputerAction,
-    frame: &ScreenFrameMeta,
-) -> Result<(), AppError> {
-    let point = match action {
-        ComputerAction::Move { point } | ComputerAction::Click { point, .. } => Some(*point),
-        ComputerAction::Drag { from, .. } => Some(*from),
-        ComputerAction::Scroll { .. }
-        | ComputerAction::TypeText { .. }
-        | ComputerAction::KeyPress { .. }
-        | ComputerAction::Wait { .. }
-        | ComputerAction::Capture => None,
-    };
-    if let Some(point) = point {
-        let completed = state
-            .cursor_companion
-            .travel_to_validated_target(
-                app,
-                CoordinateMapper::to_physical(point, frame),
-                &state.cancellation(),
-            )
-            .map_err(|_| internal("Tro chưa thể di chuyển đến thao tác."))?;
-        if !completed {
-            return Err(cancelled());
-        }
-    }
-    Ok(())
+fn parse_confirmation_id(value: &str) -> Result<Uuid, AppError> {
+    Uuid::parse_str(value).map_err(|_| internal("Không thể tạo xác nhận computer use."))
 }
 
-async fn stop_remote_and_error(
-    state: &AppState,
-    config: &crate::services::llm::LlmConfig,
-    run_id: &mut Option<String>,
-    error: AppError,
-) -> Result<(), AppError> {
-    if let Some(run_id) = run_id.take() {
-        state.computer_use.stop_run(config, &run_id).await;
-    }
-    Err(error)
-}
-
-fn prepare_agent(app: &AppHandle, state: &AppState) -> Result<(), AppError> {
-    state.reset_cancellation();
-    state.speech.stop();
-    state
-        .confirmation
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .clear();
-    state.cancel_confirmation_waiter();
-    {
-        let mut snapshot = state
-            .snapshot
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if matches!(
-            snapshot.agent,
-            AgentState::Completed | AgentState::Stopped | AgentState::Failed
-        ) {
-            snapshot.agent = AgentState::Idle;
-        }
-    }
-    set_agent(
-        app,
-        state,
-        AgentEvent::Start,
-        "Computer use đang xem màn hình và lập kế hoạch…",
-    )?;
-    sync_cursor_companion(app, state, AgentState::Planning);
-    Ok(())
-}
-
-fn set_agent(
-    app: &AppHandle,
-    state: &AppState,
-    event: AgentEvent,
-    status: &str,
-) -> Result<AgentState, AppError> {
-    let snapshot = {
-        let mut snapshot = state
-            .snapshot
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        snapshot.agent = snapshot.agent.transition(event)?;
-        snapshot.status_vi = status.to_owned();
-        snapshot.clone()
-    };
-    sync_cursor_companion(app, state, snapshot.agent);
-    app.emit("assistant_state_changed", snapshot.clone())
-        .map_err(|_| internal("Không thể cập nhật trạng thái computer use."))?;
-    Ok(snapshot.agent)
-}
-
-fn validate_goal(goal: &str) -> Result<(), AppError> {
-    if goal.len() < 3 || goal.len() > 500 {
-        return Err(AppError::new(
-            ErrorCode::InvalidRequest,
-            "Mục tiêu computer use phải rõ ràng và không quá 500 ký tự.",
-            false,
-        ));
-    }
-    Ok(())
+fn expired_confirmation() -> AppError {
+    AppError::new(
+        ErrorCode::ActionRequiresConfirmation,
+        "Xác nhận đã hết hạn hoặc cửa sổ đã thay đổi.",
+        false,
+    )
 }
 
 #[tauri::command]
@@ -461,7 +257,7 @@ pub fn resolve_confirmation(
     app: AppHandle,
     state: State<'_, AppState>,
     confirmation_id: String,
-    decision: ConfirmationDecision,
+    decision: ConfirmationChoice,
 ) -> Result<(), AppError> {
     let id = Uuid::parse_str(&confirmation_id).map_err(|_| {
         AppError::new(
@@ -470,13 +266,8 @@ pub fn resolve_confirmation(
             false,
         )
     })?;
-    let allowed = matches!(decision, ConfirmationDecision::AllowOnce);
-    if !state.resolve_confirmation_waiter(id, allowed) {
-        return Err(AppError::new(
-            ErrorCode::ActionRequiresConfirmation,
-            "Xác nhận không còn hiệu lực.",
-            false,
-        ));
+    if !state.resolve_confirmation_waiter(id, decision) {
+        return Err(expired_confirmation());
     }
     if let Some(window) = app.get_webview_window(CONFIRMATION_WINDOW) {
         let _hide = window.hide();
@@ -499,38 +290,86 @@ pub(crate) fn emergency_stop_with_state(app: &AppHandle, state: &AppState) -> Re
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .take();
-    let release_error = state.input.release_all().err();
+    let release_error = state.action_executor.release_all().err();
     state
         .confirmation
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .clear();
+    *state
+        .active_app_id
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     overlay::show_all(app);
     if let Some(window) = app.get_webview_window(CONFIRMATION_WINDOW) {
         let _hide = window.hide();
     }
+    set_runtime_status(
+        app,
+        state,
+        AgentState::Stopped,
+        "Đã dừng computer use an toàn.",
+        None,
+        Vec::new(),
+    );
+    if let Some(error) = release_error {
+        return Err(error);
+    }
+    Ok(())
+}
+
+fn prepare_agent(app: &AppHandle, state: &AppState) -> Result<(), AppError> {
+    state.reset_cancellation();
+    state.speech.stop();
+    state
+        .confirmation
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clear();
+    state.cancel_confirmation_waiter();
+    set_runtime_status(
+        app,
+        state,
+        AgentState::ResolvingApp,
+        "Computer use đang xác định ứng dụng…",
+        None,
+        Vec::new(),
+    );
+    Ok(())
+}
+
+fn set_runtime_status(
+    app_handle: &AppHandle,
+    state: &AppState,
+    agent: AgentState,
+    status_vi: &str,
+    app: Option<&ApplicationRef>,
+    choices: Vec<ApplicationRef>,
+) {
     let snapshot = {
         let mut snapshot = state
             .snapshot
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        snapshot.assistant = contracts::AssistantState::Idle;
-        snapshot.agent = if snapshot.agent == AgentState::Idle {
-            AgentState::Idle
-        } else {
-            snapshot.agent.transition(AgentEvent::Stop)?
-        };
-        snapshot.capture_active = false;
-        snapshot.status_vi = "Đã dừng computer use an toàn.".to_owned();
+        snapshot.agent = agent;
+        snapshot.status_vi = status_vi.to_owned();
+        snapshot.scoped_app_name = app.map(|value| value.display_name.clone());
+        snapshot.agent_choices = choices;
         snapshot.clone()
     };
-    sync_cursor_companion(app, state, snapshot.agent);
-    app.emit("assistant_state_changed", snapshot)
-        .map_err(|_| internal("Không thể cập nhật trạng thái dừng."))?;
-    if let Some(error) = release_error {
-        return Err(error);
+    *state
+        .active_app_id
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = app.map(|value| value.app_id.clone());
+    sync_cursor_companion(app_handle, state, agent);
+    if let Err(error) = app_handle.emit("assistant_state_changed", snapshot) {
+        tracing::warn!(
+            component = "agent_runtime",
+            operation = "emit_status",
+            error_code = "window_operation_failed",
+            source = %error
+        );
     }
-    Ok(())
 }
 
 fn sync_cursor_companion(app: &AppHandle, state: &AppState, agent: AgentState) {
@@ -558,56 +397,51 @@ enum CompanionBehavior {
 
 fn companion_behavior(agent: AgentState) -> CompanionBehavior {
     match agent {
-        AgentState::Idle | AgentState::Planning | AgentState::AwaitingConfirmation => {
-            CompanionBehavior::Follow
-        }
-        AgentState::Executing | AgentState::Observing => CompanionBehavior::StayWithAction,
+        AgentState::Idle
+        | AgentState::ResolvingApp
+        | AgentState::AwaitingAppApproval
+        | AgentState::ActivatingApp
+        | AgentState::Planning
+        | AgentState::Validating
+        | AgentState::AwaitingConfirmation
+        | AgentState::NeedsUser
+        | AgentState::PausedByUser => CompanionBehavior::Follow,
+        AgentState::Executing
+        | AgentState::Stabilizing
+        | AgentState::Observing
+        | AgentState::StaleRecovery => CompanionBehavior::StayWithAction,
         AgentState::Completed | AgentState::Stopped | AgentState::Failed => {
             CompanionBehavior::ReturnToCursor
         }
     }
 }
 
-fn cancelled() -> AppError {
-    AppError::new(ErrorCode::Cancelled, "Đã dừng computer use.", false)
+fn validate_goal(goal: &str) -> Result<(), AppError> {
+    if goal.len() < 3 || goal.len() > 500 {
+        return Err(AppError::new(
+            ErrorCode::InvalidRequest,
+            "Mục tiêu computer use phải rõ ràng và không quá 500 ký tự.",
+            false,
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use contracts::{AgentState, ComputerAction, KeyCode};
+    use contracts::AgentState;
 
-    use super::{CompanionBehavior, companion_behavior, observation_settle_time};
+    use super::{CompanionBehavior, companion_behavior};
 
     #[test]
-    fn companion_waits_at_cursor_until_an_action_has_a_target() {
+    fn companion_stays_with_validation_and_execution() {
         for state in [
-            AgentState::Idle,
-            AgentState::Planning,
-            AgentState::AwaitingConfirmation,
+            AgentState::Executing,
+            AgentState::Stabilizing,
+            AgentState::Observing,
+            AgentState::StaleRecovery,
         ] {
-            assert_eq!(companion_behavior(state), CompanionBehavior::Follow);
-        }
-        for state in [AgentState::Executing, AgentState::Observing] {
             assert_eq!(companion_behavior(state), CompanionBehavior::StayWithAction);
         }
-        for state in [
-            AgentState::Completed,
-            AgentState::Stopped,
-            AgentState::Failed,
-        ] {
-            assert_eq!(companion_behavior(state), CompanionBehavior::ReturnToCursor);
-        }
-    }
-
-    #[test]
-    fn waits_for_an_application_to_appear_after_enter() {
-        let action = ComputerAction::KeyPress {
-            keys: vec![KeyCode::Enter],
-        };
-
-        assert_eq!(
-            observation_settle_time(&action),
-            std::time::Duration::from_millis(1_500)
-        );
     }
 }

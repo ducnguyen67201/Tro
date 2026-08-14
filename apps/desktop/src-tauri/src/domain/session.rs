@@ -5,6 +5,8 @@ pub struct AgentLimits {
     started_at: Instant,
     turns: u32,
     actions: u32,
+    consecutive_stale: u32,
+    total_stale: u32,
 }
 
 impl Default for AgentLimits {
@@ -13,11 +15,30 @@ impl Default for AgentLimits {
             started_at: Instant::now(),
             turns: 0,
             actions: 0,
+            consecutive_stale: 0,
+            total_stale: 0,
         }
     }
 }
 
 impl AgentLimits {
+    pub fn record_stale(&mut self) -> Result<(), AppError> {
+        self.consecutive_stale = self.consecutive_stale.saturating_add(1);
+        self.total_stale = self.total_stale.saturating_add(1);
+        if self.consecutive_stale > 5 || self.total_stale > 10 {
+            return Err(AppError::new(
+                ErrorCode::AgentTurnLimit,
+                "Giao diện thay đổi quá nhiều lần; Tro cần bạn thử lại.",
+                false,
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn record_execution(&mut self) {
+        self.consecutive_stale = 0;
+    }
+
     pub fn record_turn(&mut self, actions: u32) -> Result<(), AppError> {
         self.turns = self.turns.saturating_add(1);
         self.actions = self.actions.saturating_add(actions);

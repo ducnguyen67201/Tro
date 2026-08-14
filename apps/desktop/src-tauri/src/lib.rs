@@ -37,6 +37,8 @@ pub fn run() {
             commands::agent::create_confirmation_window(app.handle())?;
             services::overlay::create_overlays(app.handle())?;
             let state = app.state::<AppState>();
+            let approval_path = app.path().app_config_dir()?.join("approved-apps.json");
+            state.app_approvals.configure(approval_path);
             state.reset_after_restart();
             if state.is_authenticated() {
                 state.cursor_companion.follow(app.handle())?;
@@ -58,6 +60,7 @@ pub fn run() {
             commands::auth::sign_in_with_google,
             commands::auth::sign_in_with_invite,
             commands::agent::start_agent,
+            commands::agent::start_agent_for_app,
             commands::agent::resolve_confirmation,
             commands::agent::emergency_stop,
             commands::permissions::get_permission_snapshot,
@@ -65,6 +68,8 @@ pub fn run() {
             commands::permissions::restart_app,
             commands::settings::update_settings,
             commands::settings::get_llm_config,
+            commands::settings::list_approved_apps,
+            commands::settings::revoke_approved_app,
             commands::window::get_cursor_companion_snapshot,
             commands::window::show_main_window,
             commands::window::hide_main_window,

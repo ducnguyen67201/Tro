@@ -137,7 +137,7 @@ pub async fn finish_assistant(
                     AssistantEvent::Complete,
                     "Đang chuyển sang computer use…",
                 )?;
-                crate::commands::agent::run_agent_goal(&app, &state, &goal).await
+                crate::commands::agent::run_agent_goal(&app, &state, &goal, None).await
             } else {
                 show_result_card(&app, &state);
                 crate::services::speech::speak_best_effort(state.speech.clone(), guidance).await;

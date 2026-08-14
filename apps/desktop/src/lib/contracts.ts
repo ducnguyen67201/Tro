@@ -9,10 +9,18 @@ export type AssistantState =
 
 export type AgentState =
   | "idle"
+  | "resolving_app"
+  | "awaiting_app_approval"
+  | "activating_app"
   | "planning"
+  | "validating"
   | "awaiting_confirmation"
   | "executing"
+  | "stabilizing"
   | "observing"
+  | "stale_recovery"
+  | "needs_user"
+  | "paused_by_user"
   | "completed"
   | "stopped"
   | "failed";
@@ -23,6 +31,8 @@ export interface AppSnapshot {
   transcript: string | null;
   status_vi: string;
   capture_active: boolean;
+  scoped_app_name?: string | null;
+  agent_choices?: ApplicationRef[];
 }
 
 export type CursorCompanionPhase =
@@ -76,10 +86,21 @@ export interface OverlayUpdate {
 
 export interface ConfirmationRequest {
   confirmation_id: string;
+  kind: "app_access" | "consequential_action";
   action_vi: string;
   consequence_vi: string;
   app_name: string;
+  identity_summary: string;
+  choices: ConfirmationDecision[];
   expires_at_unix_ms: number;
+}
+
+export type ConfirmationDecision = "allow_once" | "always_allow" | "stop";
+
+export interface ApplicationRef {
+  app_id: string;
+  display_name: string;
+  identity_summary: string;
 }
 
 export interface AppSettings {

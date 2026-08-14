@@ -3,8 +3,10 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   AppSettings,
   AppSnapshot,
+  ApplicationRef,
   AuthSnapshot,
   ConfirmationRequest,
+  ConfirmationDecision,
   CursorCompanionSnapshot,
   LlmConfig,
   OverlayUpdate,
@@ -21,6 +23,8 @@ const browserSnapshot: AppSnapshot = {
   transcript: null,
   status_vi: "Sẵn sàng",
   capture_active: false,
+  scoped_app_name: null,
+  agent_choices: [],
 };
 
 const isMacOS = () =>
@@ -68,6 +72,8 @@ export const desktop = {
     inTauri()
       ? invoke("start_agent", { goal, sourceFrameId: null })
       : undefined,
+  startAgentForApp: async (goal: string, appId: string): Promise<void> =>
+    inTauri() ? invoke("start_agent_for_app", { goal, appId }) : undefined,
   emergencyStop: async (): Promise<void> =>
     inTauri() ? invoke("emergency_stop") : undefined,
   requestPermission: async (permission: string): Promise<PermissionSnapshot> =>
@@ -113,11 +119,15 @@ export const desktop = {
     inTauri() ? invoke("dismiss_cursor_companion") : undefined,
   resolveConfirmation: async (
     confirmationId: string,
-    decision: "allow_once" | "stop",
+    decision: ConfirmationDecision,
   ): Promise<void> =>
     inTauri()
       ? invoke("resolve_confirmation", { confirmationId, decision })
       : undefined,
+  approvedApps: async (): Promise<ApplicationRef[]> =>
+    inTauri() ? invoke<ApplicationRef[]>("list_approved_apps") : [],
+  revokeApprovedApp: async (appId: string): Promise<boolean> =>
+    inTauri() ? invoke<boolean>("revoke_approved_app", { appId }) : true,
   onSnapshot: (
     handler: (snapshot: AppSnapshot) => void,
   ): Promise<UnlistenFn> =>

@@ -1,7 +1,9 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
-use crate::{ActionReceipt, PlannedComputerAction, ScreenFrameMeta};
+use crate::{
+    ActionReceipt, ApplicationRef, PlannedComputerAction, ScreenFrameMeta, UiObservationMetadata,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct ApiEnvelope<T> {
@@ -88,15 +90,21 @@ pub struct TutorTurnResponse {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct CreateAgentRunMetadata {
     pub goal: String,
     pub frame: ScreenFrameMeta,
+    pub observation: UiObservationMetadata,
+    pub available_apps: Vec<ApplicationRef>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct AgentTurnMetadata {
+    pub goal: String,
     pub turn_number: u32,
     pub frame: ScreenFrameMeta,
+    pub observation: UiObservationMetadata,
     pub receipts: Vec<ActionReceipt>,
 }
 
@@ -104,10 +112,30 @@ pub struct AgentTurnMetadata {
 pub struct AgentTurnResponse {
     pub run_id: String,
     pub turn_number: u32,
-    pub actions: Vec<PlannedComputerAction>,
-    pub completed: bool,
-    #[serde(default)]
-    pub message_vi: Option<String>,
+    pub status: PlannerStatus,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum PlannerStatus {
+    Actions {
+        actions: Vec<PlannedComputerAction>,
+    },
+    Completed {
+        message_vi: String,
+    },
+    NeedsUser {
+        reason_code: String,
+        message_vi: String,
+        choices: Vec<PlannerChoice>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PlannerChoice {
+    pub choice_id: String,
+    pub label: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

@@ -1,11 +1,13 @@
 use std::time::Duration;
 
 use contracts::{
-    ActionReceipt, AgentTurnMetadata, AgentTurnResponse, ApiEnvelope, AppError,
-    CreateAgentRunMetadata, ErrorCode, ScreenFrame,
+    ActionReceipt, AgentTurnMetadata, AgentTurnResponse, ApiEnvelope, AppError, ApplicationRef,
+    CreateAgentRunMetadata, ErrorCode, ImageMime,
 };
 use reqwest::multipart::{Form, Part};
 use serde::Deserialize;
+
+use crate::services::observation::Observation;
 
 use super::{llm::LlmConfig, secrets};
 
@@ -13,6 +15,29 @@ const MAX_BACKEND_RESPONSE_BYTES: usize = 1_048_576;
 
 pub struct ComputerUseGateway {
     client: reqwest::Client,
+}
+
+#[async_trait::async_trait]
+pub trait ComputerUseBackend: Send + Sync {
+    async fn create_run(
+        &self,
+        config: &LlmConfig,
+        goal: &str,
+        available_apps: Vec<ApplicationRef>,
+        observation: &Observation,
+    ) -> Result<AgentTurnResponse, AppError>;
+
+    async fn next_turn(
+        &self,
+        config: &LlmConfig,
+        goal: &str,
+        run_id: &str,
+        turn_number: u32,
+        receipts: Vec<ActionReceipt>,
+        observation: &Observation,
+    ) -> Result<AgentTurnResponse, AppError>;
+
+    async fn stop_run(&self, config: &LlmConfig, run_id: &str);
 }
 
 impl Default for ComputerUseGateway {
@@ -23,38 +48,49 @@ impl Default for ComputerUseGateway {
     }
 }
 
-impl ComputerUseGateway {
-    pub async fn create_run(
+#[async_trait::async_trait]
+impl ComputerUseBackend for ComputerUseGateway {
+    async fn create_run(
         &self,
         config: &LlmConfig,
         goal: &str,
-        mut frame: ScreenFrame,
+        available_apps: Vec<ApplicationRef>,
+        observation: &Observation,
     ) -> Result<AgentTurnResponse, AppError> {
+        let frame = observation.frame.as_ref().ok_or_else(protocol_error)?;
         let metadata = CreateAgentRunMetadata {
             goal: goal.to_owned(),
             frame: frame.meta.clone(),
+            observation: observation.metadata.clone(),
+            available_apps,
         };
         self.send_turn(
             config,
             &format!("{}/v1/agent/runs", config.backend_url.trim_end_matches('/')),
             None,
             serde_json::to_vec(&metadata).map_err(|_| protocol_error())?,
-            std::mem::take(&mut frame.bytes),
+            observation.serialized_metadata()?.to_vec(),
+            frame.bytes.clone(),
+            frame.meta.mime_type,
         )
         .await
     }
 
-    pub async fn next_turn(
+    async fn next_turn(
         &self,
         config: &LlmConfig,
+        goal: &str,
         run_id: &str,
         turn_number: u32,
         receipts: Vec<ActionReceipt>,
-        mut frame: ScreenFrame,
+        observation: &Observation,
     ) -> Result<AgentTurnResponse, AppError> {
+        let frame = observation.frame.as_ref().ok_or_else(protocol_error)?;
         let metadata = AgentTurnMetadata {
+            goal: goal.to_owned(),
             turn_number,
             frame: frame.meta.clone(),
+            observation: observation.metadata.clone(),
             receipts,
         };
         self.send_turn(
@@ -65,12 +101,14 @@ impl ComputerUseGateway {
             ),
             Some(uuid::Uuid::new_v4().to_string()),
             serde_json::to_vec(&metadata).map_err(|_| protocol_error())?,
-            std::mem::take(&mut frame.bytes),
+            observation.serialized_metadata()?.to_vec(),
+            frame.bytes.clone(),
+            frame.meta.mime_type,
         )
         .await
     }
 
-    pub async fn stop_run(&self, config: &LlmConfig, run_id: &str) {
+    async fn stop_run(&self, config: &LlmConfig, run_id: &str) {
         let Ok(Some(token)) = secrets::load_device_token() else {
             return;
         };
@@ -85,14 +123,18 @@ impl ComputerUseGateway {
             .send()
             .await;
     }
+}
 
+impl ComputerUseGateway {
     async fn send_turn(
         &self,
         config: &LlmConfig,
         endpoint: &str,
         idempotency_key: Option<String>,
         metadata: Vec<u8>,
+        observation: Vec<u8>,
         screenshot: Vec<u8>,
+        screenshot_mime: ImageMime,
     ) -> Result<AgentTurnResponse, AppError> {
         let token = secrets::load_device_token()?.ok_or_else(|| {
             AppError::new(
@@ -109,10 +151,22 @@ impl ComputerUseGateway {
                     .map_err(|_| protocol_error())?,
             )
             .part(
+                "observation",
+                Part::bytes(observation)
+                    .mime_str("application/json")
+                    .map_err(|_| protocol_error())?,
+            )
+            .part(
                 "screenshot",
                 Part::bytes(screenshot)
-                    .file_name("screen.jpg")
-                    .mime_str("image/jpeg")
+                    .file_name(match screenshot_mime {
+                        ImageMime::Jpeg => "screen.jpg",
+                        ImageMime::Png => "screen.png",
+                    })
+                    .mime_str(match screenshot_mime {
+                        ImageMime::Jpeg => "image/jpeg",
+                        ImageMime::Png => "image/png",
+                    })
                     .map_err(|_| protocol_error())?,
             );
         let mut request = self

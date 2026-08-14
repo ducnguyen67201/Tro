@@ -56,6 +56,8 @@ fn multipart_body() -> (String, Vec<u8>) {
             monitor_id: "main".to_owned(),
             width_px: 100,
             height_px: 100,
+            image_width_px: 100,
+            image_height_px: 100,
             origin_x_px: 0,
             origin_y_px: 0,
             scale_factor: 1.0,

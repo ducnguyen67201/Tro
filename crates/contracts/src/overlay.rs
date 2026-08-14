@@ -42,8 +42,12 @@ pub struct OverlayUpdate {
 pub struct ScreenFrameMeta {
     pub frame_id: String,
     pub monitor_id: String,
+    /// Physical target bounds used for normalized input mapping.
     pub width_px: u32,
     pub height_px: u32,
+    /// Encoded image dimensions sent to the provider; these may be downscaled.
+    pub image_width_px: u32,
+    pub image_height_px: u32,
     pub origin_x_px: i32,
     pub origin_y_px: i32,
     pub scale_factor: f64,

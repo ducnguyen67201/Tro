@@ -7,6 +7,8 @@ fn maps_negative_origin_and_edges_once() {
         monitor_id: "left".to_owned(),
         width_px: 1920,
         height_px: 1080,
+        image_width_px: 1920,
+        image_height_px: 1080,
         origin_x_px: -1920,
         origin_y_px: 0,
         scale_factor: 1.25,

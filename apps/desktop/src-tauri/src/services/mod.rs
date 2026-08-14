@@ -1,4 +1,8 @@
+pub mod action_executor;
+pub mod agent_runtime;
 pub mod api_client;
+pub mod app_approvals;
+pub mod application;
 pub mod audio;
 pub mod auth;
 pub mod capture;
@@ -11,7 +15,10 @@ pub mod input;
 pub mod llm;
 #[cfg(target_os = "macos")]
 pub mod modifier_shortcut;
+pub mod observation;
 pub mod overlay;
 pub mod realtime;
 pub mod secrets;
 pub mod speech;
+pub mod stabilizer;
+pub mod user_activity;

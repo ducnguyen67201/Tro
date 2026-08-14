@@ -16,6 +16,10 @@ pub trait CaptureBackend: Send + Sync {
         preference: CapturePreference,
         cursor: Option<PhysicalPoint>,
     ) -> Result<ScreenFrame, AppError>;
+
+    fn capture_window(&self, window_id: u32) -> Result<Option<ScreenFrame>, AppError>;
+
+    fn layout_generation(&self) -> Result<u64, AppError>;
 }
 
 pub struct XcapCaptureBackend;
@@ -52,26 +56,153 @@ impl CaptureBackend for XcapCaptureBackend {
             .iter()
             .find(|candidate| candidate.id().ok() == Some(monitor_id))
             .ok_or_else(|| capture_error("preferred display disappeared"))?;
-        let image = monitor.capture_image().map_err(capture_error)?;
-        let mut bytes = Cursor::new(Vec::new());
-        DynamicImage::ImageRgba8(image)
-            .write_to(&mut bytes, ImageFormat::Jpeg)
-            .map_err(capture_error)?;
+        let image = DynamicImage::ImageRgba8(monitor.capture_image().map_err(capture_error)?);
+        let encoded = encode_image(&image, ImageMime::Jpeg)?;
         Ok(ScreenFrame {
             meta: ScreenFrameMeta {
                 frame_id: Uuid::new_v4().to_string(),
                 monitor_id: monitor.id().map_err(capture_error)?.to_string(),
                 width_px: monitor.width().map_err(capture_error)?,
                 height_px: monitor.height().map_err(capture_error)?,
+                image_width_px: encoded.width_px,
+                image_height_px: encoded.height_px,
                 origin_x_px: monitor.x().map_err(capture_error)?,
                 origin_y_px: monitor.y().map_err(capture_error)?,
                 scale_factor: f64::from(monitor.scale_factor().map_err(capture_error)?),
-                layout_generation: 0,
-                mime_type: ImageMime::Jpeg,
+                layout_generation: display_layout_generation(&monitors),
+                mime_type: encoded.mime_type,
             },
-            bytes: bytes.into_inner(),
+            bytes: encoded.bytes,
         })
     }
+
+    fn capture_window(&self, window_id: u32) -> Result<Option<ScreenFrame>, AppError> {
+        let windows = Window::all().map_err(capture_error)?;
+        let Some(window) = windows
+            .into_iter()
+            .find(|candidate| candidate.id().ok() == Some(window_id))
+        else {
+            return Ok(None);
+        };
+        let width_px = window.width().map_err(capture_error)?;
+        let height_px = window.height().map_err(capture_error)?;
+        let Ok(captured) = window.capture_image() else {
+            return Ok(None);
+        };
+        let image = DynamicImage::ImageRgba8(captured);
+        let preferred_mime = if width_px <= 2_560 && height_px <= 2_560 {
+            ImageMime::Png
+        } else {
+            ImageMime::Jpeg
+        };
+        let encoded = encode_image(&image, preferred_mime)?;
+        let monitors = Monitor::all().map_err(capture_error)?;
+        let scale_factor = window
+            .current_monitor()
+            .ok()
+            .and_then(|monitor| monitor.scale_factor().ok())
+            .map_or(1.0, f64::from);
+        Ok(Some(ScreenFrame {
+            meta: ScreenFrameMeta {
+                frame_id: Uuid::new_v4().to_string(),
+                monitor_id: format!("window:{window_id}"),
+                width_px,
+                height_px,
+                image_width_px: encoded.width_px,
+                image_height_px: encoded.height_px,
+                origin_x_px: window.x().map_err(capture_error)?,
+                origin_y_px: window.y().map_err(capture_error)?,
+                scale_factor,
+                layout_generation: display_layout_generation(&monitors),
+                mime_type: encoded.mime_type,
+            },
+            bytes: encoded.bytes,
+        }))
+    }
+
+    fn layout_generation(&self) -> Result<u64, AppError> {
+        Monitor::all()
+            .map(|monitors| display_layout_generation(&monitors))
+            .map_err(capture_error)
+    }
+}
+
+struct EncodedImage {
+    bytes: Vec<u8>,
+    width_px: u32,
+    height_px: u32,
+    mime_type: ImageMime,
+}
+
+fn encode_image(image: &DynamicImage, preferred_mime: ImageMime) -> Result<EncodedImage, AppError> {
+    const MAX_EDGE: u32 = 3_840;
+    const MAX_BYTES: usize = 6_291_456;
+    let mut bounded = if image.width() > MAX_EDGE || image.height() > MAX_EDGE {
+        image.resize(MAX_EDGE, MAX_EDGE, image::imageops::FilterType::Triangle)
+    } else {
+        image.clone()
+    };
+    let mut mime_type = preferred_mime;
+    for _attempt in 0..8 {
+        let encoded = encode_once(&bounded, mime_type)?;
+        if encoded.len() <= MAX_BYTES {
+            return Ok(EncodedImage {
+                bytes: encoded,
+                width_px: bounded.width(),
+                height_px: bounded.height(),
+                mime_type,
+            });
+        }
+        mime_type = ImageMime::Jpeg;
+        bounded = bounded.resize(
+            (bounded.width().saturating_mul(4) / 5).max(1),
+            (bounded.height().saturating_mul(4) / 5).max(1),
+            image::imageops::FilterType::Triangle,
+        );
+    }
+    Err(capture_error("captured image exceeds the byte limit"))
+}
+
+fn encode_once(image: &DynamicImage, mime_type: ImageMime) -> Result<Vec<u8>, AppError> {
+    let mut bytes = Cursor::new(Vec::new());
+    image
+        .write_to(
+            &mut bytes,
+            match mime_type {
+                ImageMime::Jpeg => ImageFormat::Jpeg,
+                ImageMime::Png => ImageFormat::Png,
+            },
+        )
+        .map_err(capture_error)?;
+    Ok(bytes.into_inner())
+}
+
+fn display_layout_generation(monitors: &[Monitor]) -> u64 {
+    let mut hasher = blake3::Hasher::new();
+    let mut entries = monitors
+        .iter()
+        .filter_map(|monitor| {
+            Some((
+                monitor.id().ok()?,
+                monitor.x().ok()?,
+                monitor.y().ok()?,
+                monitor.width().ok()?,
+                monitor.height().ok()?,
+            ))
+        })
+        .collect::<Vec<_>>();
+    entries.sort_unstable();
+    for entry in entries {
+        hasher.update(&entry.0.to_le_bytes());
+        hasher.update(&entry.1.to_le_bytes());
+        hasher.update(&entry.2.to_le_bytes());
+        hasher.update(&entry.3.to_le_bytes());
+        hasher.update(&entry.4.to_le_bytes());
+    }
+    let digest = hasher.finalize();
+    let mut value = [0_u8; 8];
+    value.copy_from_slice(&digest.as_bytes()[..8]);
+    u64::from_le_bytes(value)
 }
 
 fn focused_window_monitor_id() -> Option<u32> {
