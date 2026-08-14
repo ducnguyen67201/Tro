@@ -17,7 +17,7 @@ impl Default for AppSettings {
             locale: "vi".to_owned(),
             ask_shortcut: default_ask_shortcut().to_owned(),
             dictation_shortcut: "CommandOrControl+Shift+D".to_owned(),
-            stop_shortcut: "CommandOrControl+Shift+Escape".to_owned(),
+            stop_shortcut: "Escape".to_owned(),
             reduced_motion: false,
             dictation_preview: true,
             optional_telemetry: false,

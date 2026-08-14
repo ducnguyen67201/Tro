@@ -46,10 +46,12 @@ export function ShortcutEditor({
         <input
           id="stop-shortcut"
           value={settings.stop_shortcut}
-          onChange={(event) => {
-            onChange({ stop_shortcut: event.target.value });
-          }}
+          readOnly
+          aria-describedby="stop-shortcut-help"
         />
+        <small id="stop-shortcut-help">
+          Nhấn Esc bất kỳ lúc nào để dừng nghe, xử lý hoặc computer use.
+        </small>
       </div>
     </section>
   );

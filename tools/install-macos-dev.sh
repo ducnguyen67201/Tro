@@ -82,7 +82,7 @@ fi
   AGENT_ENABLED=true \
   BIND_ADDR="$TRO_API_BIND_ADDR" \
   REALTIME_ENABLED=false \
-  TRO_DEVELOPMENT_INVITE_CODE=TRO-LOCAL \
+  TRO_DEVELOPMENT_INVITE_CODE=TRO-TEST \
   "$TRO_API_EXECUTABLE"
 attempt=0
 while ! /usr/bin/curl --fail --silent --max-time 1 "$TRO_HEALTH_URL" >/dev/null; do

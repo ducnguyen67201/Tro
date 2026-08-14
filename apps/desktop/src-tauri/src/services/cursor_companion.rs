@@ -12,6 +12,7 @@ use tauri::{
     AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, WebviewUrl, WebviewWindowBuilder,
     utils::config::BackgroundThrottlingPolicy,
 };
+use tokio_util::sync::CancellationToken;
 
 pub const WINDOW_LABEL: &str = "assistant-cursor";
 
@@ -161,7 +162,8 @@ impl CursorCompanion {
         &self,
         app: &AppHandle,
         target: PhysicalPoint,
-    ) -> tauri::Result<()> {
+        cancellation: &CancellationToken,
+    ) -> tauri::Result<bool> {
         self.stop_tracker();
         let window = companion_window(app)?;
         configure_window(&window, false, true)?;
@@ -170,7 +172,7 @@ impl CursorCompanion {
         set_phase(&self.runtime, CursorCompanionPhase::Acting);
         emit_phase(&window, CursorCompanionPhase::Acting);
         window.show()?;
-        animate_window(&window, start, destination)
+        animate_window(&window, start, destination, Some(cancellation))
     }
 
     /// Animates back to the user's current pointer, then resumes continuous following.
@@ -183,7 +185,7 @@ impl CursorCompanion {
         set_phase(&self.runtime, CursorCompanionPhase::Acting);
         emit_phase(&window, CursorCompanionPhase::Acting);
         window.show()?;
-        animate_window(&window, start, destination)?;
+        let _completed = animate_window(&window, start, destination, None)?;
         self.follow(app)
     }
 
@@ -383,18 +385,22 @@ fn animate_window(
     window: &tauri::WebviewWindow,
     start: PhysicalPosition<i32>,
     destination: PhysicalPosition<i32>,
-) -> tauri::Result<()> {
+    cancellation: Option<&CancellationToken>,
+) -> tauri::Result<bool> {
     let frame_count =
         u32::try_from((TRAVEL_DURATION.as_millis() / TRACK_INTERVAL.as_millis()).max(1))
             .unwrap_or(1);
     for frame in 1..=frame_count {
+        if cancellation.is_some_and(CancellationToken::is_cancelled) {
+            return Ok(false);
+        }
         let progress = f64::from(frame) / f64::from(frame_count);
         window.set_position(tween_position(start, destination, progress))?;
         if frame < frame_count {
             thread::sleep(TRACK_INTERVAL);
         }
     }
-    Ok(())
+    Ok(true)
 }
 
 fn physical_size(width: f64, height: f64, scale_factor: f64) -> PhysicalSize<u32> {

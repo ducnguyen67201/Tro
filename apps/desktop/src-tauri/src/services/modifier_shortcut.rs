@@ -7,14 +7,18 @@ use std::{
     time::Duration,
 };
 
+use contracts::{AgentState, AssistantState, AssistantUiState};
 use objc2_core_graphics::{CGEventSource, CGEventSourceStateID};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
+
+use crate::{app_state::AppState, commands};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(8);
 const COMMAND_LEFT: u16 = 55;
 const COMMAND_RIGHT: u16 = 54;
 const OPTION_LEFT: u16 = 58;
 const OPTION_RIGHT: u16 = 61;
+const ESCAPE: u16 = 53;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ChordTransition {
@@ -25,6 +29,19 @@ enum ChordTransition {
 #[derive(Debug, Default)]
 struct CommandOptionChord {
     active: bool,
+}
+
+#[derive(Debug, Default)]
+struct PressEdge {
+    pressed: bool,
+}
+
+impl PressEdge {
+    fn update(&mut self, pressed: bool) -> bool {
+        let just_pressed = pressed && !self.pressed;
+        self.pressed = pressed;
+        just_pressed
+    }
 }
 
 impl CommandOptionChord {
@@ -116,12 +133,20 @@ impl Drop for Listener {
 
 fn listen(stop: Arc<AtomicBool>, app: AppHandle) {
     let mut chord = CommandOptionChord::default();
+    let mut escape = PressEdge::default();
     while !stop.load(Ordering::Acquire) {
         if let Some(transition) = chord.update(ModifierState::read()) {
             handle_transition(&app, transition);
         }
+        if escape.update(key_pressed(ESCAPE)) {
+            handle_emergency_stop(&app);
+        }
         thread::sleep(POLL_INTERVAL);
     }
+}
+
+fn key_pressed(key_code: u16) -> bool {
+    CGEventSource::key_state(CGEventSourceStateID::CombinedSessionState, key_code)
 }
 
 fn handle_transition(app: &AppHandle, transition: ChordTransition) {
@@ -134,9 +159,49 @@ fn handle_transition(app: &AppHandle, transition: ChordTransition) {
     }
 }
 
+fn handle_emergency_stop(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let active = {
+        let snapshot = state
+            .snapshot
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        work_is_active(&snapshot)
+    };
+    if !active {
+        return;
+    }
+    if let Err(error) = commands::agent::emergency_stop_with_state(app, &state) {
+        tracing::warn!(
+            component = "shortcut",
+            operation = "escape_emergency_stop",
+            error_code = ?error.code
+        );
+    }
+}
+
+fn work_is_active(snapshot: &AssistantUiState) -> bool {
+    matches!(
+        snapshot.assistant,
+        AssistantState::Capturing
+            | AssistantState::Listening
+            | AssistantState::Thinking
+            | AssistantState::Speaking
+            | AssistantState::Guiding
+    ) || matches!(
+        snapshot.agent,
+        AgentState::Planning
+            | AgentState::AwaitingConfirmation
+            | AgentState::Executing
+            | AgentState::Observing
+    )
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{ChordTransition, CommandOptionChord, ModifierState};
+    use contracts::{AgentState, AssistantState, AssistantUiState};
+
+    use super::{ChordTransition, CommandOptionChord, ModifierState, PressEdge, work_is_active};
 
     #[test]
     fn activates_only_after_command_and_option_are_both_held() {
@@ -223,5 +288,31 @@ mod tests {
             Some(ChordTransition::Released)
         );
         assert_eq!(chord.update(ModifierState::default()), None);
+    }
+
+    #[test]
+    fn escape_emits_only_once_until_the_key_is_released() {
+        let mut edge = PressEdge::default();
+        assert!(!edge.update(false));
+        assert!(edge.update(true));
+        assert!(!edge.update(true));
+        assert!(!edge.update(false));
+        assert!(edge.update(true));
+    }
+
+    #[test]
+    fn emergency_stop_runs_only_while_assistant_or_agent_work_is_active() {
+        let mut snapshot = AssistantUiState::default();
+        assert!(!work_is_active(&snapshot));
+
+        snapshot.assistant = AssistantState::Thinking;
+        assert!(work_is_active(&snapshot));
+
+        snapshot.assistant = AssistantState::Idle;
+        snapshot.agent = AgentState::Executing;
+        assert!(work_is_active(&snapshot));
+
+        snapshot.agent = AgentState::Completed;
+        assert!(!work_is_active(&snapshot));
     }
 }

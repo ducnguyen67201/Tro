@@ -350,10 +350,17 @@ fn travel_to_action(
         | ComputerAction::Capture => None,
     };
     if let Some(point) = point {
-        state
+        let completed = state
             .cursor_companion
-            .travel_to_validated_target(app, CoordinateMapper::to_physical(point, frame))
+            .travel_to_validated_target(
+                app,
+                CoordinateMapper::to_physical(point, frame),
+                &state.cancellation(),
+            )
             .map_err(|_| internal("Tro chưa thể di chuyển đến thao tác."))?;
+        if !completed {
+            return Err(cancelled());
+        }
     }
     Ok(())
 }
@@ -463,6 +470,10 @@ pub fn resolve_confirmation(
 
 #[tauri::command]
 pub fn emergency_stop(app: AppHandle, state: State<'_, AppState>) -> Result<(), AppError> {
+    emergency_stop_with_state(&app, &state)
+}
+
+pub(crate) fn emergency_stop_with_state(app: &AppHandle, state: &AppState) -> Result<(), AppError> {
     state.cancellation().cancel();
     state.audio.stop();
     state.speech.stop();
@@ -472,13 +483,13 @@ pub fn emergency_stop(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .take();
-    state.input.release_all()?;
+    let release_error = state.input.release_all().err();
     state
         .confirmation
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .clear();
-    overlay::show_all(&app);
+    overlay::show_all(app);
     if let Some(window) = app.get_webview_window(CONFIRMATION_WINDOW) {
         let _hide = window.hide();
     }
@@ -497,9 +508,13 @@ pub fn emergency_stop(app: AppHandle, state: State<'_, AppState>) -> Result<(), 
         snapshot.status_vi = "Đã dừng computer use an toàn.".to_owned();
         snapshot.clone()
     };
-    sync_cursor_companion(&app, &state, snapshot.agent);
+    sync_cursor_companion(app, state, snapshot.agent);
     app.emit("assistant_state_changed", snapshot)
-        .map_err(|_| internal("Không thể cập nhật trạng thái dừng."))
+        .map_err(|_| internal("Không thể cập nhật trạng thái dừng."))?;
+    if let Some(error) = release_error {
+        return Err(error);
+    }
+    Ok(())
 }
 
 fn sync_cursor_companion(app: &AppHandle, state: &AppState, agent: AgentState) {

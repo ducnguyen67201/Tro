@@ -24,7 +24,7 @@ impl InputBackend for NativeInputBackend {
         cancellation: &CancellationToken,
     ) -> Result<(), AppError> {
         if cancellation.is_cancelled() {
-            return Err(cancelled());
+            return Err(cancelled_error());
         }
         let mut enigo = Enigo::new(&input_settings()).map_err(input_error)?;
         match action {
@@ -45,7 +45,7 @@ impl InputBackend for NativeInputBackend {
                     .map_err(input_error)?;
                 for _ in 0..*count {
                     if cancellation.is_cancelled() {
-                        return Err(cancelled());
+                        return Err(cancelled_error());
                     }
                     enigo
                         .button(map_button(*button), Direction::Click)
@@ -56,17 +56,20 @@ impl InputBackend for NativeInputBackend {
                 enigo
                     .scroll(*delta_x, enigo::Axis::Horizontal)
                     .map_err(input_error)?;
+                ensure_not_cancelled(cancellation)?;
                 enigo
                     .scroll(*delta_y, enigo::Axis::Vertical)
                     .map_err(input_error)?;
             }
-            ComputerAction::TypeText { text } => enigo.text(text.expose()).map_err(input_error)?,
+            ComputerAction::TypeText { text } => {
+                type_text_cancelably(&mut enigo, text.expose(), cancellation)?;
+            }
             ComputerAction::Wait { milliseconds } => {
                 let deadline = std::time::Instant::now()
                     + std::time::Duration::from_millis(u64::from(*milliseconds).min(10_000));
                 while std::time::Instant::now() < deadline {
                     if cancellation.is_cancelled() {
-                        return Err(cancelled());
+                        return Err(cancelled_error());
                     }
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
@@ -76,21 +79,37 @@ impl InputBackend for NativeInputBackend {
                 let to = CoordinateMapper::to_physical(*to, frame);
                 enigo
                     .move_mouse(from.x, from.y, Coordinate::Abs)
-                    .and_then(|()| enigo.button(Button::Left, Direction::Press))
-                    .and_then(|()| enigo.move_mouse(to.x, to.y, Coordinate::Abs))
-                    .and_then(|()| enigo.button(Button::Left, Direction::Release))
                     .map_err(input_error)?;
+                enigo
+                    .button(Button::Left, Direction::Press)
+                    .map_err(input_error)?;
+                if let Err(error) = ensure_not_cancelled(cancellation) {
+                    let _release = enigo.button(Button::Left, Direction::Release);
+                    return Err(error);
+                }
+                let movement = enigo.move_mouse(to.x, to.y, Coordinate::Abs);
+                let release = enigo.button(Button::Left, Direction::Release);
+                movement.map_err(input_error)?;
+                release.map_err(input_error)?;
             }
             ComputerAction::KeyPress { keys } => {
                 let mapped = keys.iter().map(map_key).collect::<Result<Vec<_>, _>>()?;
+                let mut pressed = Vec::with_capacity(mapped.len());
                 for key in &mapped {
-                    if cancellation.is_cancelled() {
-                        return Err(cancelled());
+                    if let Err(error) = ensure_not_cancelled(cancellation) {
+                        release_keys(&mut enigo, &pressed);
+                        return Err(error);
                     }
-                    enigo.key(*key, Direction::Press).map_err(input_error)?;
+                    if let Err(error) = enigo.key(*key, Direction::Press) {
+                        release_keys(&mut enigo, &pressed);
+                        return Err(input_error(error));
+                    }
+                    pressed.push(*key);
                 }
-                for key in mapped.iter().rev() {
-                    enigo.key(*key, Direction::Release).map_err(input_error)?;
+                let cancelled = cancellation.is_cancelled();
+                release_keys(&mut enigo, &pressed);
+                if cancelled {
+                    return Err(cancelled_error());
                 }
             }
             ComputerAction::Capture => {}
@@ -111,6 +130,35 @@ impl InputBackend for NativeInputBackend {
         ] {
             let _result = enigo.key(key, Direction::Release);
         }
+        Ok(())
+    }
+}
+
+fn type_text_cancelably(
+    enigo: &mut Enigo,
+    text: &str,
+    cancellation: &CancellationToken,
+) -> Result<(), AppError> {
+    for character in text.chars() {
+        ensure_not_cancelled(cancellation)?;
+        let mut encoded = [0_u8; 4];
+        enigo
+            .text(character.encode_utf8(&mut encoded))
+            .map_err(input_error)?;
+    }
+    Ok(())
+}
+
+fn release_keys(enigo: &mut Enigo, keys: &[enigo::Key]) {
+    for key in keys.iter().rev() {
+        let _release = enigo.key(*key, Direction::Release);
+    }
+}
+
+fn ensure_not_cancelled(cancellation: &CancellationToken) -> Result<(), AppError> {
+    if cancellation.is_cancelled() {
+        Err(cancelled_error())
+    } else {
         Ok(())
     }
 }
@@ -172,16 +220,26 @@ fn input_error(error: impl std::fmt::Display) -> AppError {
     )
 }
 
-fn cancelled() -> AppError {
+fn cancelled_error() -> AppError {
     AppError::new(ErrorCode::Cancelled, "Đã dừng theo yêu cầu.", false)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::input_settings;
+    use tokio_util::sync::CancellationToken;
+
+    use super::{ensure_not_cancelled, input_settings};
 
     #[test]
     fn input_actions_never_open_permission_prompt_implicitly() {
         assert!(!input_settings().open_prompt_to_get_permissions);
+    }
+
+    #[test]
+    fn input_actions_observe_the_emergency_cancellation_token() {
+        let cancellation = CancellationToken::new();
+        assert!(ensure_not_cancelled(&cancellation).is_ok());
+        cancellation.cancel();
+        assert!(ensure_not_cancelled(&cancellation).is_err());
     }
 }

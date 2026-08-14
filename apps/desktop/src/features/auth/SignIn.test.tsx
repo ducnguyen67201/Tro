@@ -26,7 +26,7 @@ test("submits a real access-code login before continuing", async () => {
   render(<SignIn onAuthenticated={authenticated} />);
 
   fireEvent.change(screen.getByLabelText("Mã truy cập"), {
-    target: { value: "tro-local" },
+    target: { value: "tro-test" },
   });
   fireEvent.click(
     screen.getByLabelText("Tôi là sinh viên đại học và đã đủ 18 tuổi."),
@@ -34,7 +34,7 @@ test("submits a real access-code login before continuing", async () => {
   fireEvent.click(screen.getByRole("button", { name: /Tiếp tục/ }));
 
   await waitFor(() => {
-    expect(signIn).toHaveBeenCalledWith("TRO-LOCAL", true);
+    expect(signIn).toHaveBeenCalledWith("TRO-TEST", true);
     expect(authenticated).toHaveBeenCalledOnce();
   });
 });
