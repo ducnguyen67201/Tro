@@ -21,17 +21,17 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
   const [inputPermission, setInputPermission] =
     useState<PermissionStatus>("not_determined");
   const [requestingInput, setRequestingInput] = useState(false);
-  const usesCommandOption = initial.ask_shortcut === "Command+Option";
+  const usesCommandControl = initial.ask_shortcut === "Command+Control";
 
   const refreshPermission = useCallback(() => {
-    if (!usesCommandOption) return;
+    if (!usesCommandControl) return;
     void desktop
       .permissions()
       .then((snapshot) => {
         setInputPermission(snapshot.input_control);
       })
       .catch(() => undefined);
-  }, [usesCommandOption]);
+  }, [usesCommandControl]);
 
   useEffect(() => {
     refreshPermission();
@@ -75,12 +75,12 @@ export function SettingsPage({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       <ShortcutEditor settings={settings} onChange={update} />
-      {usesCommandOption ? (
+      {usesCommandControl ? (
         <section className="settings-section">
           <h2>Quyền phím tắt macOS</h2>
           <PermissionCard
             icon="⌘"
-            title="Phím tắt Command + Option"
+            title="Phím tắt Command + Control"
             detail="Cho phép Tro nhận hai phím này khi bạn đang dùng ứng dụng khác"
             status={inputPermission}
             requesting={requestingInput}

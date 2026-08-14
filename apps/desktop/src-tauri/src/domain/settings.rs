@@ -27,7 +27,7 @@ impl Default for AppSettings {
 
 const fn default_ask_shortcut() -> &'static str {
     if cfg!(target_os = "macos") {
-        "Command+Option"
+        "Command+Control"
     } else {
         "CommandOrControl+Shift+Space"
     }

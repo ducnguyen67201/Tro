@@ -16,8 +16,8 @@ use crate::{app_state::AppState, commands};
 const POLL_INTERVAL: Duration = Duration::from_millis(8);
 const COMMAND_LEFT: u16 = 55;
 const COMMAND_RIGHT: u16 = 54;
-const OPTION_LEFT: u16 = 58;
-const OPTION_RIGHT: u16 = 61;
+const CONTROL_LEFT: u16 = 59;
+const CONTROL_RIGHT: u16 = 62;
 const ESCAPE: u16 = 53;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -27,7 +27,7 @@ enum ChordTransition {
 }
 
 #[derive(Debug, Default)]
-struct CommandOptionChord {
+struct CommandControlChord {
     active: bool,
 }
 
@@ -44,9 +44,9 @@ impl PressEdge {
     }
 }
 
-impl CommandOptionChord {
+impl CommandControlChord {
     fn update(&mut self, state: ModifierState) -> Option<ChordTransition> {
-        let next_active = state.command && state.option;
+        let next_active = state.command && state.control;
         if next_active == self.active {
             return None;
         }
@@ -62,7 +62,7 @@ impl CommandOptionChord {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct ModifierState {
     command: bool,
-    option: bool,
+    control: bool,
 }
 
 impl ModifierState {
@@ -71,19 +71,19 @@ impl ModifierState {
         Self {
             command: CGEventSource::key_state(source, COMMAND_LEFT)
                 || CGEventSource::key_state(source, COMMAND_RIGHT),
-            option: CGEventSource::key_state(source, OPTION_LEFT)
-                || CGEventSource::key_state(source, OPTION_RIGHT),
+            control: CGEventSource::key_state(source, CONTROL_LEFT)
+                || CGEventSource::key_state(source, CONTROL_RIGHT),
         }
     }
 }
 
 #[derive(Debug, Default)]
-pub struct CommandOptionShortcut {
+pub struct CommandControlShortcut {
     listener: Mutex<Option<Listener>>,
 }
 
-impl CommandOptionShortcut {
-    /// Starts a read-only poller for the physical Command and Option key states.
+impl CommandControlShortcut {
+    /// Starts a read-only poller for the physical Command and Control key states.
     /// This check never opens a permission prompt and is safe to call repeatedly.
     pub fn ensure_started(&self, app: &AppHandle) -> bool {
         let mut listener = self
@@ -98,7 +98,7 @@ impl CommandOptionShortcut {
         let worker_stop = Arc::clone(&stop);
         let app = app.clone();
         let worker = match thread::Builder::new()
-            .name("tro-command-option".to_owned())
+            .name("tro-command-control".to_owned())
             .spawn(move || listen(worker_stop, app))
         {
             Ok(worker) => worker,
@@ -132,7 +132,7 @@ impl Drop for Listener {
 }
 
 fn listen(stop: Arc<AtomicBool>, app: AppHandle) {
-    let mut chord = CommandOptionChord::default();
+    let mut chord = CommandControlChord::default();
     let mut escape = PressEdge::default();
     while !stop.load(Ordering::Acquire) {
         if let Some(transition) = chord.update(ModifierState::read()) {
@@ -201,36 +201,36 @@ fn work_is_active(snapshot: &AssistantUiState) -> bool {
 mod tests {
     use contracts::{AgentState, AssistantState, AssistantUiState};
 
-    use super::{ChordTransition, CommandOptionChord, ModifierState, PressEdge, work_is_active};
+    use super::{ChordTransition, CommandControlChord, ModifierState, PressEdge, work_is_active};
 
     #[test]
-    fn activates_only_after_command_and_option_are_both_held() {
-        let mut chord = CommandOptionChord::default();
+    fn activates_only_after_command_and_control_are_both_held() {
+        let mut chord = CommandControlChord::default();
         assert_eq!(
             chord.update(ModifierState {
                 command: true,
-                option: false,
+                control: false,
             }),
             None
         );
         assert_eq!(
             chord.update(ModifierState {
                 command: true,
-                option: true,
+                control: true,
             }),
             Some(ChordTransition::Pressed)
         );
         assert_eq!(
             chord.update(ModifierState {
                 command: true,
-                option: true,
+                control: true,
             }),
             None
         );
         assert_eq!(
             chord.update(ModifierState {
                 command: false,
-                option: true,
+                control: true,
             }),
             Some(ChordTransition::Released)
         );
@@ -238,12 +238,12 @@ mod tests {
 
     #[test]
     fn ignores_single_modifiers() {
-        let mut chord = CommandOptionChord::default();
+        let mut chord = CommandControlChord::default();
         assert_eq!(chord.update(ModifierState::default()), None);
         assert_eq!(
             chord.update(ModifierState {
                 command: false,
-                option: true,
+                control: true,
             }),
             None
         );
@@ -255,18 +255,18 @@ mod tests {
         for released in [
             ModifierState {
                 command: false,
-                option: true,
+                control: true,
             },
             ModifierState {
                 command: true,
-                option: false,
+                control: false,
             },
         ] {
-            let mut chord = CommandOptionChord::default();
+            let mut chord = CommandControlChord::default();
             assert_eq!(
                 chord.update(ModifierState {
                     command: true,
-                    option: true,
+                    control: true,
                 }),
                 Some(ChordTransition::Pressed)
             );
@@ -276,10 +276,10 @@ mod tests {
 
     #[test]
     fn emits_only_one_transition_per_edge() {
-        let mut chord = CommandOptionChord::default();
+        let mut chord = CommandControlChord::default();
         let active = ModifierState {
             command: true,
-            option: true,
+            control: true,
         };
         assert_eq!(chord.update(active), Some(ChordTransition::Pressed));
         assert_eq!(chord.update(active), None);

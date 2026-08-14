@@ -15,9 +15,9 @@ export function ShortcutEditor({
         <input
           id="ask-shortcut"
           value={settings.ask_shortcut}
-          readOnly={settings.ask_shortcut === "Command+Option"}
+          readOnly={settings.ask_shortcut === "Command+Control"}
           aria-describedby={
-            settings.ask_shortcut === "Command+Option"
+            settings.ask_shortcut === "Command+Control"
               ? "ask-shortcut-help"
               : undefined
           }
@@ -25,9 +25,9 @@ export function ShortcutEditor({
             onChange({ ask_shortcut: event.target.value });
           }}
         />
-        {settings.ask_shortcut === "Command+Option" ? (
+        {settings.ask_shortcut === "Command+Control" ? (
           <small id="ask-shortcut-help">
-            Giữ ⌘ + ⌥ để nói, thả phím để dừng.
+            Giữ ⌘ + ⌃ để nói, thả phím để dừng.
           </small>
         ) : null}
       </div>

@@ -86,16 +86,16 @@ export default function App() {
             timeout: 0 as ReturnType<typeof window.setTimeout>,
             finished: false,
           };
-          void desktop.startAssistant("command_option").catch(() => undefined);
+          void desktop.startAssistant("command_control").catch(() => undefined);
           current.timeout = window.setTimeout(() => {
             if (pendingAsk === current) {
-              finishPendingAsk("command_option_timeout");
+              finishPendingAsk("command_control_timeout");
             }
           }, MAX_HOLD_TO_TALK_MS);
           pendingAsk = current;
         }
         if (action === "ask_release") {
-          finishPendingAsk("command_option_released");
+          finishPendingAsk("command_control_released");
         }
         if (action === "dictation") {
           if (!authenticatedRef.current) {

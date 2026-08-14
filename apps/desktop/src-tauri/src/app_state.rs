@@ -9,7 +9,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 #[cfg(target_os = "macos")]
-use crate::services::modifier_shortcut::CommandOptionShortcut;
+use crate::services::modifier_shortcut::CommandControlShortcut;
 use crate::{
     domain::{confirmation::ConfirmationManager, settings::AppSettings},
     services::{
@@ -44,7 +44,7 @@ pub struct AppState {
     pub cursor_companion: CursorCompanion,
     authenticated: AtomicBool,
     #[cfg(target_os = "macos")]
-    pub command_option_shortcut: CommandOptionShortcut,
+    pub command_control_shortcut: CommandControlShortcut,
     cancellation: RwLock<CancellationToken>,
 }
 
@@ -70,7 +70,7 @@ impl AppState {
             // A stored token is not trusted until the backend refreshes it.
             authenticated: AtomicBool::new(false),
             #[cfg(target_os = "macos")]
-            command_option_shortcut: CommandOptionShortcut::default(),
+            command_control_shortcut: CommandControlShortcut::default(),
             cancellation: RwLock::new(CancellationToken::new()),
         }
     }

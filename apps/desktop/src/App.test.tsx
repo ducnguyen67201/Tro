@@ -239,14 +239,14 @@ describe("App background lifecycle", () => {
       bridge.shortcut?.("ask");
     });
     await waitFor(() => {
-      expect(bridge.startAssistant).toHaveBeenCalledWith("command_option");
+      expect(bridge.startAssistant).toHaveBeenCalledWith("command_control");
     });
     act(() => {
       bridge.shortcut?.("ask_release");
     });
     await waitFor(() => {
       expect(bridge.finishAssistant).toHaveBeenCalledWith(
-        "command_option_released",
+        "command_control_released",
       );
     });
     expect(bridge.followCursorCompanion).not.toHaveBeenCalled();
@@ -288,7 +288,7 @@ describe("App background lifecycle", () => {
     await waitFor(() => {
       expect(bridge.finishAssistant).toHaveBeenCalledOnce();
       expect(bridge.finishAssistant).toHaveBeenCalledWith(
-        "command_option_released",
+        "command_control_released",
       );
     });
   });
@@ -309,7 +309,7 @@ describe("App background lifecycle", () => {
 
     expect(bridge.finishAssistant).toHaveBeenCalledOnce();
     expect(bridge.finishAssistant).toHaveBeenCalledWith(
-      "command_option_timeout",
+      "command_control_timeout",
     );
   });
 });
