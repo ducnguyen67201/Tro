@@ -4,7 +4,7 @@ use crate::{
     app_state::AppState,
     domain::{error::internal, session::AgentLimits},
     security::action_policy::{ActionContext, ActionPolicy},
-    services::overlay,
+    services::{capture::CapturePreference, overlay},
 };
 use contracts::{
     ActionOutcome, ActionReceipt, AgentEvent, AgentState, AppError, ComputerAction,
@@ -192,11 +192,12 @@ async fn run_loop(app: &AppHandle, state: &AppState, goal: &str) -> Result<(), A
             }
         };
         set_agent(app, state, AgentEvent::Executed, "Đang kiểm tra kết quả…")?;
+        let observation_delay = observation_settle_time(&planned.action);
         tokio::select! {
             () = cancellation.cancelled() => {
                 return stop_remote_and_error(state, &config, &mut active_run, cancelled()).await;
             }
-            () = tokio::time::sleep(Duration::from_millis(420)) => {}
+            () = tokio::time::sleep(observation_delay) => {}
         }
         let next_frame = match capture_current(app, state).await {
             Ok(frame) => frame,
@@ -241,11 +242,26 @@ async fn capture_current(app: &AppHandle, state: &AppState) -> Result<ScreenFram
         y: position.y.round() as i32,
     });
     let capture = state.capture.clone();
-    let result = tokio::task::spawn_blocking(move || capture.capture_display_at(cursor)).await;
+    let result = tokio::task::spawn_blocking(move || {
+        capture.capture_display(CapturePreference::FocusedWindow, cursor)
+    })
+    .await;
     overlay::show_all(app);
     match result {
         Ok(result) => result,
         Err(_) => Err(internal("Không thể chụp màn hình cho computer use.")),
+    }
+}
+
+fn observation_settle_time(action: &ComputerAction) -> Duration {
+    const DEFAULT_SETTLE_TIME: Duration = Duration::from_millis(420);
+    const APP_LAUNCH_SETTLE_TIME: Duration = Duration::from_millis(1_500);
+
+    match action {
+        ComputerAction::KeyPress { keys } if keys.contains(&contracts::KeyCode::Enter) => {
+            APP_LAUNCH_SETTLE_TIME
+        }
+        _ => DEFAULT_SETTLE_TIME,
     }
 }
 
@@ -558,9 +574,9 @@ fn cancelled() -> AppError {
 
 #[cfg(test)]
 mod tests {
-    use contracts::AgentState;
+    use contracts::{AgentState, ComputerAction, KeyCode};
 
-    use super::{CompanionBehavior, companion_behavior};
+    use super::{CompanionBehavior, companion_behavior, observation_settle_time};
 
     #[test]
     fn companion_waits_at_cursor_until_an_action_has_a_target() {
@@ -581,5 +597,17 @@ mod tests {
         ] {
             assert_eq!(companion_behavior(state), CompanionBehavior::ReturnToCursor);
         }
+    }
+
+    #[test]
+    fn waits_for_an_application_to_appear_after_enter() {
+        let action = ComputerAction::KeyPress {
+            keys: vec![KeyCode::Enter],
+        };
+
+        assert_eq!(
+            observation_settle_time(&action),
+            std::time::Duration::from_millis(1_500)
+        );
     }
 }

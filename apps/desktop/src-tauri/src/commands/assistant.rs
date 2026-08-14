@@ -1,7 +1,7 @@
 use crate::{
     app_state::AppState,
     domain::error::internal,
-    services::{llm::LlmTurnInput, overlay},
+    services::{capture::CapturePreference, llm::LlmTurnInput, overlay},
 };
 use contracts::{
     AppError, AssistantEvent, AssistantState, AssistantUiState, ErrorCode, PhysicalPoint,
@@ -45,8 +45,10 @@ pub async fn start_assistant(
         y: position.y.round() as i32,
     });
     let capture = state.capture.clone();
-    let capture_result =
-        tokio::task::spawn_blocking(move || capture.capture_display_at(cursor)).await;
+    let capture_result = tokio::task::spawn_blocking(move || {
+        capture.capture_display(CapturePreference::Cursor, cursor)
+    })
+    .await;
     overlay::show_all(&app);
     let frame = match capture_result {
         Ok(Ok(frame)) => frame,
