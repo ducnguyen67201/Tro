@@ -413,6 +413,7 @@ export function LandingPage() {
       </header>
 
       <section className="hero" id="top">
+        <div className="hero-gate" aria-hidden="true" />
         <div className="hero-desktop" aria-hidden="true">
           <article className="floating-window floating-window--lesson">
             <div className="floating-window__bar">

@@ -1736,7 +1736,7 @@ body {
 .hero::before {
   content: "";
   position: absolute;
-  z-index: -2;
+  z-index: -3;
   inset: 0;
   background:
     radial-gradient(
@@ -1763,6 +1763,39 @@ body {
   background: rgba(255, 255, 255, 0.72);
   filter: blur(58px);
   transform: translateX(-50%);
+}
+
+.hero-gate {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("/hero/school-gate-8bit.png");
+  background-repeat: no-repeat;
+  background-position: center 50%;
+  background-size: 112% 132%;
+  filter: brightness(1.08) contrast(1.13) saturate(0.92);
+  image-rendering: pixelated;
+  mix-blend-mode: multiply;
+  opacity: 0.82;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(0, 0, 0, 0.72) 7%,
+    black 14%,
+    black 86%,
+    rgba(0, 0, 0, 0.72) 93%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    rgba(0, 0, 0, 0.72) 7%,
+    black 14%,
+    black 86%,
+    rgba(0, 0, 0, 0.72) 93%,
+    transparent 100%
+  );
 }
 
 .hero-desktop {
@@ -2690,6 +2723,26 @@ footer {
     min-height: 820px;
     padding-inline: 24px;
     padding-top: 110px;
+  }
+
+  .hero-gate {
+    background-position: center 46%;
+    background-size: auto 118%;
+    opacity: 0.68;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 12%,
+      black 88%,
+      transparent
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black 12%,
+      black 88%,
+      transparent
+    );
   }
 
   .floating-window--lesson,
