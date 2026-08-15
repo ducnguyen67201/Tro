@@ -265,6 +265,63 @@ function ComputerUseDemo({ copy }: { copy: SiteCopy["demo"] }) {
   );
 }
 
+function PartnersSection({ copy }: { copy: SiteCopy["partners"] }) {
+  return (
+    <section
+      className="partners-section"
+      id="partners"
+      aria-labelledby="partners-title"
+    >
+      <div className="partners-shell">
+        <div className="partners-intro">
+          <div>
+            <p className="section-label">{copy.label}</p>
+            <h2 id="partners-title">{copy.title}</h2>
+          </div>
+          <p>{copy.intro}</p>
+        </div>
+
+        <div className="partners-list">
+          {copy.entries.map((partner) => (
+            <a
+              className="partner-card"
+              href={partner.website}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={partner.linkLabel}
+              key={partner.website}
+            >
+              <span className="partner-card__logo" aria-hidden="true">
+                <img
+                  src={partner.logo}
+                  alt=""
+                  width="655"
+                  height="655"
+                  loading="lazy"
+                />
+              </span>
+              <span className="partner-card__copy">
+                <span className="partner-card__eyebrow">
+                  <i aria-hidden="true" />
+                  {partner.featuredLabel}
+                </span>
+                <strong>{partner.name}</strong>
+                <span className="partner-card__description">
+                  {partner.description}
+                </span>
+              </span>
+              <span className="partner-card__cta">
+                {partner.visit}
+                <span aria-hidden="true">↗</span>
+              </span>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const localeStorageKey = "tro-locale";
 
 function getInitialLocale(): Locale {
@@ -469,6 +526,8 @@ export function LandingPage() {
           </div>
         </aside>
       </section>
+
+      <PartnersSection copy={copy.partners} />
 
       <ComputerUseDemo copy={copy.demo} />
 

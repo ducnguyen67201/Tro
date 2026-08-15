@@ -60,6 +60,20 @@ export type SiteCopy = {
     noteBody: string;
     noteAria: string;
   };
+  partners: {
+    label: string;
+    title: string;
+    intro: string;
+    entries: Array<{
+      featuredLabel: string;
+      name: string;
+      description: string;
+      visit: string;
+      linkLabel: string;
+      website: string;
+      logo: string;
+    }>;
+  };
   demo: {
     label: string;
     title: string;
@@ -147,6 +161,24 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       noteKicker: "Không chỉ là một ô đáp án.",
       noteBody: "Một gia sư có mặt ngay trên màn hình của bạn.",
       noteAria: "Nguyên tắc sản phẩm của Tro",
+    },
+    partners: {
+      label: "Đối tác đồng hành",
+      title: "Cùng người học đi xa hơn.",
+      intro:
+        "Tro hợp tác với những nhà giáo dục tin rằng việc học nên gần gũi, rõ ràng và thực tế.",
+      entries: [
+        {
+          featuredLabel: "Đối tác giáo dục đầu tiên",
+          name: "Just Tin English",
+          description:
+            "Tiếng Anh cho người học lại từ đầu—từ ngữ pháp, từ vựng, nghe và nói đến TOEIC và tiếng Anh thương mại.",
+          visit: "Khám phá Just Tin English",
+          linkLabel: "Mở trang web Just Tin English trong tab mới",
+          website: "https://www.justtinenglish.com/",
+          logo: "/partners/just-tin-english.png",
+        },
+      ],
     },
     demo: {
       label: "Một phím tắt. Một bước tiếp theo thật rõ.",
@@ -268,6 +300,24 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       noteKicker: "Not another answer box.",
       noteBody: "A tutor that meets you on the screen.",
       noteAria: "Tro product principle",
+    },
+    partners: {
+      label: "Learning partner",
+      title: "Better learning, built together.",
+      intro:
+        "Tro partners with educators who believe learning should feel approachable, clear, and practical.",
+      entries: [
+        {
+          featuredLabel: "Our first education partner",
+          name: "Just Tin English",
+          description:
+            "English for learners starting again—from grammar, vocabulary, listening, and speaking to TOEIC and business English.",
+          visit: "Explore Just Tin English",
+          linkLabel: "Open the Just Tin English website in a new tab",
+          website: "https://www.justtinenglish.com/",
+          logo: "/partners/just-tin-english.png",
+        },
+      ],
     },
     demo: {
       label: "One shortcut. One clear next step.",
