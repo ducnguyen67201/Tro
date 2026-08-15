@@ -1,6 +1,0 @@
-[advisories]
-ignore = [
-  # sqlx 0.8's umbrella crate records optional sqlx-mysql/RSA in Cargo.lock even
-  # though Tro enables only Postgres and the crate is absent from every target tree.
-  "RUSTSEC-2023-0071",
-]

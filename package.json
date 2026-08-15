@@ -1,5 +1,5 @@
 {
-  "name": "tro",
+  "name": "tro-marketing",
   "private": true,
   "type": "module",
   "version": "0.1.0",
@@ -8,19 +8,14 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --filter @tro/desktop tauri dev",
-    "dev:web": "pnpm --filter @tro/desktop dev",
-    "dev:landing": "pnpm --filter @tro/landing dev",
-    "start:landing": "pnpm --filter @tro/landing start",
-    "install:mac": "sh tools/install-macos-dev.sh",
+    "dev": "pnpm --filter @tro/landing dev",
+    "start": "pnpm --filter @tro/landing start",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "eslint apps/desktop/src apps/desktop/*.ts apps/landing/src apps/landing/*.ts",
-    "typecheck": "pnpm --filter @tro/desktop typecheck",
-    "typecheck:landing": "pnpm --filter @tro/landing typecheck",
-    "test": "pnpm --filter @tro/desktop exec vitest",
-    "build": "pnpm --filter @tro/desktop build",
-    "build:landing": "pnpm --filter @tro/landing build"
+    "lint": "eslint apps/landing/src apps/landing/*.ts",
+    "typecheck": "pnpm --filter @tro/landing typecheck",
+    "build": "pnpm --filter @tro/landing build",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",

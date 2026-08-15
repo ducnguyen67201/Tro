@@ -9,12 +9,7 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   {
-    files: [
-      "apps/desktop/src/**/*.{ts,tsx}",
-      "apps/desktop/*.ts",
-      "apps/landing/src/**/*.{ts,tsx}",
-      "apps/landing/*.ts",
-    ],
+    files: ["apps/landing/src/**/*.{ts,tsx}", "apps/landing/*.ts"],
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },
       parserOptions: {

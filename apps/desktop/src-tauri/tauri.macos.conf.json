@@ -1,6 +1,0 @@
-{
-  "bundle": {
-    "targets": ["dmg", "app"],
-    "macOS": { "signingIdentity": null, "hardenedRuntime": true }
-  }
-}
