@@ -4,3 +4,5 @@ dist/
 *.log
 *.tsbuildinfo
 .vite/
+.gstack/
+apps/landing/public/downloads/*.zip

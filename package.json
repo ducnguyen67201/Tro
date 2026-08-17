@@ -15,7 +15,8 @@
     "lint": "eslint apps/landing/src apps/landing/*.ts",
     "typecheck": "pnpm --filter @tro/landing typecheck",
     "build": "pnpm --filter @tro/landing build",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm build"
+    "test": "pnpm --filter @tro/landing test",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",

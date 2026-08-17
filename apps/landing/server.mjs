@@ -4,6 +4,12 @@ import { createServer } from "node:http";
 import { extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  latestRelease,
+  publicDownloadMetadata,
+  releaseDownload,
+} from "./release-downloads.mjs";
+
 const appDirectory = fileURLToPath(new URL(".", import.meta.url));
 const distDirectory = resolve(appDirectory, "dist");
 const port = Number.parseInt(process.env.PORT ?? "4173", 10);
@@ -20,6 +26,7 @@ const contentTypes = {
   ".png": "image/png",
   ".svg": "image/svg+xml; charset=utf-8",
   ".webp": "image/webp",
+  ".zip": "application/zip",
 };
 
 const securityHeaders = {
@@ -38,6 +45,15 @@ function sendJson(response, statusCode, payload) {
     "Content-Type": "application/json; charset=utf-8",
   });
   response.end(JSON.stringify(payload));
+}
+
+function redirectToDownload(response, location) {
+  response.writeHead(302, {
+    ...securityHeaders,
+    "Cache-Control": "no-store",
+    Location: location,
+  });
+  response.end();
 }
 
 function resolvePublicPath(pathname) {
@@ -81,6 +97,41 @@ const server = createServer(async (request, response) => {
     return;
   }
 
+  if (requestUrl.pathname === "/api/downloads/latest") {
+    try {
+      sendJson(response, 200, publicDownloadMetadata(await latestRelease()));
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : "unknown_error",
+          event: "release_metadata_failed",
+        }),
+      );
+      sendJson(response, 503, { error: "release_metadata_unavailable" });
+    }
+    return;
+  }
+
+  if (requestUrl.pathname.startsWith("/downloads/latest/")) {
+    try {
+      const asset = releaseDownload(await latestRelease(), requestUrl.pathname);
+      if (!asset) {
+        sendJson(response, 404, { error: "release_asset_not_found" });
+        return;
+      }
+      redirectToDownload(response, asset.url);
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          error: error instanceof Error ? error.message : "unknown_error",
+          event: "release_download_failed",
+        }),
+      );
+      sendJson(response, 503, { error: "release_download_unavailable" });
+    }
+    return;
+  }
+
   let filePath;
   try {
     filePath = await findFile(requestUrl.pathname);
@@ -95,7 +146,9 @@ const server = createServer(async (request, response) => {
   }
 
   const extension = extname(filePath).toLowerCase();
-  const isImmutableAsset = requestUrl.pathname.startsWith("/assets/");
+  const isImmutableAsset =
+    requestUrl.pathname.startsWith("/assets/") ||
+    requestUrl.pathname.startsWith("/downloads/");
 
   response.writeHead(200, {
     ...securityHeaders,

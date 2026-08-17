@@ -73,6 +73,16 @@ function BatteryIcon() {
   );
 }
 
+function DownloadIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 3v11" />
+      <path d="m7.5 10 4.5 4.5 4.5-4.5" />
+      <path d="M5 20h14" />
+    </svg>
+  );
+}
+
 function MacControls() {
   return (
     <span className="mac-controls" aria-hidden="true">
@@ -322,6 +332,304 @@ function PartnersSection({ copy }: { copy: SiteCopy["partners"] }) {
   );
 }
 
+type DownloadPlatform = keyof SiteCopy["download"]["platforms"];
+type DownloadChannel = "stable" | "preview" | "unsigned-preview";
+
+type DownloadTarget = {
+  channel: DownloadChannel;
+  href: string;
+  sizeBytes: number | null;
+  version: string;
+};
+
+type DownloadManifest = {
+  platforms: Record<DownloadPlatform, DownloadTarget | null>;
+  version: string | null;
+};
+
+const codeSigningPolicyUrl =
+  "https://github.com/ducnguyen67201/TroCode/blob/main/CODE_SIGNING_POLICY.md";
+const privacyPolicyUrl =
+  "https://github.com/ducnguyen67201/TroCode/blob/main/PRIVACY.md";
+const bundledDownloads: DownloadManifest = {
+  platforms: {
+    macos: null,
+    windows: null,
+  },
+  version: null,
+};
+
+const downloadPlatformOrder: DownloadPlatform[] = ["macos", "windows"];
+
+function downloadTarget(value: unknown): DownloadTarget | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Record<string, unknown>;
+  const channel = candidate.channel;
+  if (
+    !["stable", "preview", "unsigned-preview"].includes(
+      typeof channel === "string" ? channel : "",
+    ) ||
+    typeof candidate.href !== "string" ||
+    !candidate.href.startsWith("/downloads/latest/") ||
+    typeof candidate.sizeBytes !== "number" ||
+    !Number.isSafeInteger(candidate.sizeBytes) ||
+    candidate.sizeBytes < 0 ||
+    typeof candidate.version !== "string" ||
+    !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(candidate.version)
+  ) {
+    return null;
+  }
+  return {
+    channel: channel as DownloadChannel,
+    href: candidate.href,
+    sizeBytes: candidate.sizeBytes,
+    version: candidate.version,
+  };
+}
+
+function useLatestDownloads(): DownloadManifest {
+  const [manifest, setManifest] = useState<DownloadManifest>(bundledDownloads);
+
+  useEffect(() => {
+    const abortController = new AbortController();
+    void fetch("/api/downloads/latest", {
+      headers: { Accept: "application/json" },
+      signal: abortController.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Latest downloads are unavailable.");
+        return (await response.json()) as unknown;
+      })
+      .then((value) => {
+        if (!value || typeof value !== "object") return;
+        const candidate = value as Record<string, unknown>;
+        const platforms = candidate.platforms;
+        if (!platforms || typeof platforms !== "object") return;
+        const platformValues = platforms as Record<string, unknown>;
+        const version =
+          typeof candidate.version === "string" &&
+          /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(candidate.version)
+            ? candidate.version
+            : null;
+
+        setManifest({
+          platforms: {
+            macos: downloadTarget(platformValues.macos),
+            windows: downloadTarget(platformValues.windows),
+          },
+          version,
+        });
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setManifest(bundledDownloads);
+        }
+      });
+
+    return () => abortController.abort();
+  }, []);
+
+  return manifest;
+}
+
+function fileSize(target: DownloadTarget | null, fallback: string): string {
+  if (!target?.sizeBytes) return fallback;
+  return `${Math.ceil(target.sizeBytes / (1024 * 1024))} MB`;
+}
+
+function platformPresentation(
+  copy: SiteCopy["download"],
+  platform: DownloadPlatform,
+  target: DownloadTarget | null,
+) {
+  const option = copy.platforms[platform];
+  const status =
+    target?.channel === "unsigned-preview"
+      ? copy.unsignedPreviewStatus
+      : target?.channel === "preview"
+        ? copy.previewStatus
+        : target
+          ? (option.availableStatus ?? option.status)
+          : option.status;
+  return {
+    cta: target ? (option.availableCta ?? option.cta) : option.cta,
+    size: fileSize(target, option.size),
+    status,
+  };
+}
+
+function HeaderDownloadOption({
+  copy,
+  platform,
+  target,
+}: {
+  copy: SiteCopy["download"];
+  platform: DownloadPlatform;
+  target: DownloadTarget | null;
+}) {
+  const option = copy.platforms[platform];
+  const presentation = platformPresentation(copy, platform, target);
+  const className = target
+    ? "header-download__option header-download__option--available"
+    : "header-download__option header-download__option--unavailable";
+
+  return (
+    <a className={className} href={target?.href ?? "#download"}>
+      <span className="header-download__badge" aria-hidden="true">
+        {option.badge}
+      </span>
+      <span>
+        <strong>{option.name}</strong>
+        <small>{option.requirements}</small>
+      </span>
+      <em>{presentation.status}</em>
+    </a>
+  );
+}
+
+function PlatformDownloadOption({
+  copy,
+  download,
+  platform,
+}: {
+  copy: SiteCopy["download"];
+  download: DownloadTarget | null;
+  platform: DownloadPlatform;
+}) {
+  const option = copy.platforms[platform];
+  const href = download?.href ?? null;
+  const presentation = platformPresentation(copy, platform, download);
+  const content = (
+    <>
+      <span className="download-platform__badge" aria-hidden="true">
+        {option.badge}
+      </span>
+      <span className="download-platform__details">
+        <span className="download-platform__heading">
+          <strong>{option.name}</strong>
+          <small>{presentation.status}</small>
+        </span>
+        <span className="download-platform__requirements">
+          {option.requirements}
+        </span>
+        <span className="download-platform__footer">
+          <span>{presentation.size}</span>
+          <span className="download-platform__action">
+            {presentation.cta}
+            <span aria-hidden="true">{href ? "↓" : "·"}</span>
+          </span>
+        </span>
+      </span>
+    </>
+  );
+
+  if (href) {
+    return (
+      <a
+        className={`download-platform download-platform--available${
+          download?.channel === "unsigned-preview"
+            ? " download-platform--unsigned"
+            : ""
+        }`}
+        href={href}
+        download
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <button
+      className="download-platform download-platform--unavailable"
+      type="button"
+      disabled
+    >
+      {content}
+    </button>
+  );
+}
+
+function DownloadSection({
+  copy,
+  manifest,
+}: {
+  copy: SiteCopy["download"];
+  manifest: DownloadManifest;
+}) {
+  const windowsAvailable = Boolean(manifest.platforms.windows);
+  const windowsUnsigned =
+    manifest.platforms.windows?.channel === "unsigned-preview";
+  return (
+    <section
+      className="download-section"
+      id="download"
+      aria-labelledby="download-title"
+    >
+      <div className="download-copy">
+        <p className="section-label">{copy.label}</p>
+        <h2 id="download-title">{copy.title}</h2>
+        <p className="download-description">{copy.body}</p>
+
+        <dl className="download-facts">
+          <div>
+            <dt>{copy.versionLabel}</dt>
+            <dd>{manifest.version ? `v${manifest.version}` : copy.version}</dd>
+          </div>
+          <div>
+            <dt>{copy.platformLabel}</dt>
+            <dd>{copy.platform}</dd>
+          </div>
+          <div>
+            <dt>{copy.sizeLabel}</dt>
+            <dd>
+              {windowsUnsigned
+                ? copy.previewPlatformsAvailable
+                : windowsAvailable
+                  ? copy.allPlatformsAvailable
+                  : copy.size}
+            </dd>
+          </div>
+        </dl>
+      </div>
+
+      <aside className="download-card" aria-label={copy.platformsLabel}>
+        <span className="download-card__icon">
+          <DownloadIcon />
+        </span>
+        <div className="download-platforms">
+          {downloadPlatformOrder.map((platform) => (
+            <PlatformDownloadOption
+              copy={copy}
+              download={manifest.platforms[platform]}
+              key={platform}
+              platform={platform}
+            />
+          ))}
+        </div>
+        <p className="download-access-note">{copy.accessNote}</p>
+        {windowsUnsigned ? (
+          <p className="download-unsigned-warning" role="status">
+            {copy.unsignedPreviewWarning}
+          </p>
+        ) : null}
+        <p className="download-preview-note">{copy.previewNote}</p>
+        <div className="download-policy-note">
+          <p>{copy.signingDisclosure}</p>
+          <span>
+            <a href={codeSigningPolicyUrl} target="_blank" rel="noreferrer">
+              {copy.codeSigningPolicy}
+            </a>
+            <a href={privacyPolicyUrl} target="_blank" rel="noreferrer">
+              {copy.privacyPolicy}
+            </a>
+          </span>
+        </div>
+      </aside>
+    </section>
+  );
+}
+
 const localeStorageKey = "tro-locale";
 
 function getInitialLocale(): Locale {
@@ -340,6 +648,7 @@ function getInitialLocale(): Locale {
 export function LandingPage() {
   const [locale, setLocale] = useState<Locale>(getInitialLocale);
   const copy = siteCopy[locale];
+  const downloadManifest = useLatestDownloads();
 
   useEffect(() => {
     document.documentElement.lang = locale;
@@ -405,10 +714,27 @@ export function LandingPage() {
               EN
             </button>
           </div>
-          <a className="header-cta" href="#demo">
-            {copy.header.getTro}
-            <span aria-hidden="true">↘</span>
-          </a>
+          <details className="header-download">
+            <summary className="header-cta">
+              <span className="header-cta__label">{copy.header.getTro}</span>
+              <span className="header-cta__chevron" aria-hidden="true">
+                ⌄
+              </span>
+            </summary>
+            <div
+              className="header-download__menu"
+              aria-label={copy.download.platformsLabel}
+            >
+              {downloadPlatformOrder.map((platform) => (
+                <HeaderDownloadOption
+                  copy={copy.download}
+                  key={platform}
+                  platform={platform}
+                  target={downloadManifest.platforms[platform]}
+                />
+              ))}
+            </div>
+          </details>
         </div>
       </header>
 
@@ -552,6 +878,8 @@ export function LandingPage() {
         </div>
       </section>
 
+      <DownloadSection copy={copy.download} manifest={downloadManifest} />
+
       <section className="closing-section">
         <div>
           <p className="code-kicker code-kicker--light">
@@ -563,7 +891,7 @@ export function LandingPage() {
             {copy.closing.secondLine}
           </h2>
         </div>
-        <a href="#demo" className="closing-cta">
+        <a href="#download" className="closing-cta">
           {copy.closing.cta}
           <span aria-hidden="true">↗</span>
         </a>

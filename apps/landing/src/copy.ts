@@ -102,6 +102,50 @@ export type SiteCopy = {
     title: string;
     features: [Feature, Feature, Feature];
   };
+  download: {
+    label: string;
+    title: string;
+    body: string;
+    versionLabel: string;
+    version: string;
+    platformLabel: string;
+    platform: string;
+    sizeLabel: string;
+    size: string;
+    allPlatformsAvailable: string;
+    previewPlatformsAvailable: string;
+    previewStatus: string;
+    unsignedPreviewStatus: string;
+    platformsLabel: string;
+    platforms: {
+      macos: {
+        badge: string;
+        name: string;
+        requirements: string;
+        size: string;
+        status: string;
+        cta: string;
+        availableStatus?: string;
+        availableCta?: string;
+      };
+      windows: {
+        badge: string;
+        name: string;
+        requirements: string;
+        size: string;
+        status: string;
+        cta: string;
+        availableStatus?: string;
+        availableCta?: string;
+      };
+    };
+    accessNote: string;
+    previewNote: string;
+    unsignedPreviewWarning: string;
+    signingDisclosure: string;
+    codeSigningPolicy: string;
+    privacyPolicy: string;
+  };
   closing: {
     codeObject: string;
     firstLine: string;
@@ -243,6 +287,51 @@ export const siteCopy: Record<Locale, SiteCopy> = {
         },
       ],
     },
+    download: {
+      label: "Bản xem trước cho máy tính",
+      title: "Tro dành cho Mac và Windows.",
+      body: "Chọn phiên bản phù hợp để nhận hướng dẫn bằng giọng nói và ngay trên màn hình khi bạn đang học.",
+      versionLabel: "Phiên bản",
+      version: "0.1.0 preview",
+      platformLabel: "Hệ điều hành",
+      platform: "macOS + Windows",
+      sizeLabel: "Tình trạng",
+      size: "Mac có sẵn · Windows sắp ra mắt",
+      allPlatformsAvailable: "Mac và Windows có sẵn",
+      previewPlatformsAvailable: "Mac có sẵn · Windows bản xem trước chưa ký",
+      previewStatus: "Bản xem trước",
+      unsignedPreviewStatus: "Bản xem trước chưa ký",
+      platformsLabel: "Chọn phiên bản Tro cho máy tính",
+      platforms: {
+        macos: {
+          badge: "MAC",
+          name: "macOS",
+          requirements: "macOS 13+ · Apple silicon",
+          size: "139 MB ZIP",
+          status: "Có sẵn",
+          cta: "Tải Tro cho Mac",
+        },
+        windows: {
+          badge: "WIN",
+          name: "Windows",
+          requirements: "Windows 10/11 · x64",
+          size: "Bản x64",
+          status: "Sắp ra mắt",
+          cta: "Windows sắp ra mắt",
+          availableStatus: "Có sẵn",
+          availableCta: "Tải Tro cho Windows",
+        },
+      },
+      accessNote: "Bản truy cập sớm cần mã kích hoạt từ Tro.",
+      previewNote:
+        "Các nút tải tự động trỏ tới bản phát hành Tro mới nhất trên GitHub.",
+      unsignedPreviewWarning:
+        "Bản Windows hiện chưa được ký mã trong khi Tro chờ SignPath duyệt. Windows SmartScreen có thể hiển thị cảnh báo trước khi cài đặt.",
+      signingDisclosure:
+        "Các bản Windows đã ký trong tương lai sẽ dùng dịch vụ ký mã miễn phí của SignPath.io, chứng thư bởi SignPath Foundation.",
+      codeSigningPolicy: "Chính sách ký mã (Code signing policy)",
+      privacyPolicy: "Chính sách quyền riêng tư",
+    },
     closing: {
       codeObject: "hocSinh.tuTin",
       firstLine: "Bớt mắc kẹt.",
@@ -271,7 +360,7 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       whyTro: "why tro",
       backToTop: "Back to top",
       systemStatus: "Tro system status",
-      getTro: "get tro",
+      getTro: "download",
     },
     hero: {
       practiceWindow: "practice_04",
@@ -381,6 +470,51 @@ export const siteCopy: Record<Locale, SiteCopy> = {
           body: "Get a clear path through the problem without losing the learning moment.",
         },
       ],
+    },
+    download: {
+      label: "Desktop preview",
+      title: "Tro for Mac and Windows.",
+      body: "Choose the desktop version for voice and on-screen guidance while you study.",
+      versionLabel: "Version",
+      version: "0.1.0 preview",
+      platformLabel: "Systems",
+      platform: "macOS + Windows",
+      sizeLabel: "Availability",
+      size: "Mac available · Windows coming soon",
+      allPlatformsAvailable: "Mac and Windows available",
+      previewPlatformsAvailable: "Mac available · unsigned Windows preview",
+      previewStatus: "Preview",
+      unsignedPreviewStatus: "Unsigned preview",
+      platformsLabel: "Choose a Tro desktop version",
+      platforms: {
+        macos: {
+          badge: "MAC",
+          name: "macOS",
+          requirements: "macOS 13+ · Apple silicon",
+          size: "139 MB ZIP",
+          status: "Available",
+          cta: "Download Tro for Mac",
+        },
+        windows: {
+          badge: "WIN",
+          name: "Windows",
+          requirements: "Windows 10/11 · x64",
+          size: "x64 build",
+          status: "Coming soon",
+          cta: "Windows coming soon",
+          availableStatus: "Available",
+          availableCta: "Download Tro for Windows",
+        },
+      },
+      accessNote: "Early access requires an activation code from Tro.",
+      previewNote:
+        "Download buttons automatically follow the latest Tro release on GitHub.",
+      unsignedPreviewWarning:
+        "The Windows build is currently unsigned while Tro awaits SignPath approval. Windows SmartScreen may show a warning before installation.",
+      signingDisclosure:
+        "Future signed Windows releases will use free code signing provided by SignPath.io, certificate by SignPath Foundation.",
+      codeSigningPolicy: "Code signing policy",
+      privacyPolicy: "Privacy policy",
     },
     closing: {
       codeObject: "student.confidence",
