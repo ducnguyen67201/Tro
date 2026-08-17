@@ -298,7 +298,7 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       sizeLabel: "Tình trạng",
       size: "Mac có sẵn · Windows sắp ra mắt",
       allPlatformsAvailable: "Mac và Windows có sẵn",
-      previewPlatformsAvailable: "Mac có sẵn · Windows bản xem trước chưa ký",
+      previewPlatformsAvailable: "Bản xem trước chưa ký cho Mac và Windows",
       previewStatus: "Bản xem trước",
       unsignedPreviewStatus: "Bản xem trước chưa ký",
       platformsLabel: "Chọn phiên bản Tro cho máy tính",
@@ -324,13 +324,13 @@ export const siteCopy: Record<Locale, SiteCopy> = {
           availableCta: "Tải Tro cho Windows",
         },
       },
-      accessNote: "Bản truy cập sớm cần mã kích hoạt từ Tro.",
+      accessNote: "Đăng nhập bằng Google để bắt đầu sử dụng Tro.",
       previewNote:
         "Các nút tải tự động trỏ tới bản phát hành Tro mới nhất trên GitHub.",
       unsignedPreviewWarning:
-        "Bản Windows hiện chưa được ký mã trong khi Tro chờ SignPath duyệt. Windows SmartScreen có thể hiển thị cảnh báo trước khi cài đặt.",
+        "Các bản Mac và Windows hiện là bản xem trước chưa ký. macOS Gatekeeper hoặc Windows SmartScreen có thể hiển thị cảnh báo trước khi cài đặt.",
       signingDisclosure:
-        "Các bản Windows đã ký trong tương lai sẽ dùng dịch vụ ký mã miễn phí của SignPath.io, chứng thư bởi SignPath Foundation.",
+        "Bản Mac ổn định sẽ dùng Apple Developer ID và notarization; bản Windows ổn định sẽ dùng SignPath.io, chứng thư bởi SignPath Foundation.",
       codeSigningPolicy: "Chính sách ký mã (Code signing policy)",
       privacyPolicy: "Chính sách quyền riêng tư",
     },
@@ -484,7 +484,7 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       sizeLabel: "Availability",
       size: "Mac available · Windows coming soon",
       allPlatformsAvailable: "Mac and Windows available",
-      previewPlatformsAvailable: "Mac available · unsigned Windows preview",
+      previewPlatformsAvailable: "Unsigned previews for Mac and Windows",
       previewStatus: "Preview",
       unsignedPreviewStatus: "Unsigned preview",
       platformsLabel: "Choose a Tro desktop version",
@@ -510,13 +510,13 @@ export const siteCopy: Record<Locale, SiteCopy> = {
           availableCta: "Download Tro for Windows",
         },
       },
-      accessNote: "Early access requires an activation code from Tro.",
+      accessNote: "Sign in with Google to start using Tro.",
       previewNote:
         "Download buttons automatically follow the latest Tro release on GitHub.",
       unsignedPreviewWarning:
-        "The Windows build is currently unsigned while Tro awaits SignPath approval. Windows SmartScreen may show a warning before installation.",
+        "The current Mac and Windows builds are unsigned previews. macOS Gatekeeper or Windows SmartScreen may warn before installation.",
       signingDisclosure:
-        "Future signed Windows releases will use free code signing provided by SignPath.io, certificate by SignPath Foundation.",
+        "Stable Mac builds will use Apple Developer ID and notarization; stable Windows builds will use SignPath.io, certificate by SignPath Foundation.",
       codeSigningPolicy: "Code signing policy",
       privacyPolicy: "Privacy policy",
     },

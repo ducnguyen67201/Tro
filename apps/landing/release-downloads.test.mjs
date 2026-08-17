@@ -102,7 +102,7 @@ test("uses a clearly marked unsigned preview when no stable release exists", asy
   const metadata = publicDownloadMetadata(release);
 
   assert.equal(requests.length, 2);
-  assert.equal(metadata.platforms.macos?.channel, "preview");
+  assert.equal(metadata.platforms.macos?.channel, "unsigned-preview");
   assert.deepEqual(metadata.platforms.windows, {
     channel: "unsigned-preview",
     href: "/downloads/latest/windows-x64",

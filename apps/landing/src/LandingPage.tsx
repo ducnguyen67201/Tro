@@ -558,8 +558,9 @@ function DownloadSection({
   manifest: DownloadManifest;
 }) {
   const windowsAvailable = Boolean(manifest.platforms.windows);
-  const windowsUnsigned =
-    manifest.platforms.windows?.channel === "unsigned-preview";
+  const hasUnsignedPreview = downloadPlatformOrder.some(
+    (platform) => manifest.platforms[platform]?.channel === "unsigned-preview",
+  );
   return (
     <section
       className="download-section"
@@ -583,7 +584,7 @@ function DownloadSection({
           <div>
             <dt>{copy.sizeLabel}</dt>
             <dd>
-              {windowsUnsigned
+              {hasUnsignedPreview
                 ? copy.previewPlatformsAvailable
                 : windowsAvailable
                   ? copy.allPlatformsAvailable
@@ -608,7 +609,7 @@ function DownloadSection({
           ))}
         </div>
         <p className="download-access-note">{copy.accessNote}</p>
-        {windowsUnsigned ? (
+        {hasUnsignedPreview ? (
           <p className="download-unsigned-warning" role="status">
             {copy.unsignedPreviewWarning}
           </p>

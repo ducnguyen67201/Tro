@@ -90,13 +90,18 @@ function parseRelease(value, expectedPrerelease) {
   const assets = value.assets.map(releaseAsset).filter(Boolean);
   const version = value.tag_name.trim().replace(/^v/, "");
   if (!version) return null;
-  const channel = expectedPrerelease ? "preview" : "stable";
   const macosAsset = findMacOSAsset(assets) ?? null;
   const windowsAsset = findWindowsAsset(assets) ?? null;
 
   return {
     platforms: {
-      macos: macosAsset ? { ...macosAsset, channel, version } : null,
+      macos: macosAsset
+        ? {
+            ...macosAsset,
+            channel: expectedPrerelease ? "unsigned-preview" : "stable",
+            version,
+          }
+        : null,
       windows: windowsAsset
         ? {
             ...windowsAsset,
