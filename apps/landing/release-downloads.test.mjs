@@ -19,6 +19,7 @@ const githubAsset = (name, size = 100) => ({
 const releasePayload = () => ({
   assets: [
     githubAsset("TroCode-darwin-arm64-0.2.0.zip", 200),
+    githubAsset("TroCode-darwin-x64-0.2.0.zip", 250),
     githubAsset("TroCode-0.2.0 Setup.exe", 300),
     githubAsset("TroCode-0.2.0-full.nupkg", 400),
   ],
@@ -32,8 +33,13 @@ test("selects trusted platform installers from the latest release", () => {
   const release = parseLatestRelease(releasePayload());
 
   assert.equal(release.version, "0.2.0");
-  assert.equal(release.platforms.macos?.size, 200);
+  assert.equal(release.platforms.macosApple?.size, 200);
+  assert.equal(release.platforms.macosIntel?.size, 250);
   assert.equal(release.platforms.windows?.size, 300);
+  assert.equal(
+    releaseDownload(release, "/downloads/latest/macos-x64")?.name,
+    "TroCode-darwin-x64-0.2.0.zip",
+  );
   assert.equal(
     releaseDownload(release, "/downloads/latest/windows-x64")?.name,
     "TroCode-0.2.0 Setup.exe",
@@ -55,11 +61,12 @@ test("ignores untrusted and wrong-architecture release assets", () => {
       size: 100,
     },
     githubAsset("TroCode-win32-arm64 Setup.exe"),
-    githubAsset("TroCode-darwin-x64-0.2.0.zip"),
+    githubAsset("TroCode-darwin-ia32-0.2.0.zip"),
   ];
 
   const release = parseLatestRelease(payload);
-  assert.equal(release.platforms.macos, null);
+  assert.equal(release.platforms.macosApple, null);
+  assert.equal(release.platforms.macosIntel, null);
   assert.equal(release.platforms.windows, null);
 });
 
@@ -102,7 +109,13 @@ test("uses a clearly marked unsigned preview when no stable release exists", asy
   const metadata = publicDownloadMetadata(release);
 
   assert.equal(requests.length, 2);
-  assert.equal(metadata.platforms.macos?.channel, "unsigned-preview");
+  assert.equal(metadata.platforms.macosApple?.channel, "unsigned-preview");
+  assert.deepEqual(metadata.platforms.macosIntel, {
+    channel: "unsigned-preview",
+    href: "/downloads/latest/macos-x64",
+    sizeBytes: 250,
+    version: "0.2.0-signpath-bootstrap.14",
+  });
   assert.deepEqual(metadata.platforms.windows, {
     channel: "unsigned-preview",
     href: "/downloads/latest/windows-x64",

@@ -118,7 +118,17 @@ export type SiteCopy = {
     unsignedPreviewStatus: string;
     platformsLabel: string;
     platforms: {
-      macos: {
+      macosApple: {
+        badge: string;
+        name: string;
+        requirements: string;
+        size: string;
+        status: string;
+        cta: string;
+        availableStatus?: string;
+        availableCta?: string;
+      };
+      macosIntel: {
         badge: string;
         name: string;
         requirements: string;
@@ -196,11 +206,11 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       codeValue: "dễ",
       tagline: "học nhẹ hơn. tiến xa hơn.",
       description:
-        "Một người bạn học ưu tiên tiếng Việt: nhìn thấy màn hình của bạn, lắng nghe khi bạn mắc kẹt và cùng bạn đi qua từng bước tiếp theo.",
+        "Một người bạn học ưu tiên tiếng Việt: hiểu ứng dụng bạn đang mở, lắng nghe khi bạn mắc kẹt và cùng bạn đi qua từng bước tiếp theo.",
       primaryCta: "xem tro hoạt động",
       secondaryCta: "vì sao học sinh chọn tro",
       shortcutPrefix: "Nhấn",
-      shortcutSuffix: "ở bất cứ đâu · macOS 14.2+",
+      shortcutSuffix: "ở bất cứ đâu · macOS 13+ · Windows 10/11",
       noteWindow: "tro nhắn",
       noteKicker: "Không chỉ là một ô đáp án.",
       noteBody: "Một gia sư có mặt ngay trên màn hình của bạn.",
@@ -272,8 +282,8 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       features: [
         {
           number: "01",
-          title: "Hiểu ngữ cảnh của bạn",
-          body: "Chỉ chia sẻ màn hình khi bạn yêu cầu. Tro hiểu đúng bài tập đang ở trước mắt bạn.",
+          title: "Hiểu màn hình đang mở",
+          body: "Khi tác vụ cần dùng màn hình, Tro quan sát ứng dụng đang hoạt động trước, xin phép trước thay đổi quan trọng và hiển thị viền màu trong lúc điều khiển.",
         },
         {
           number: "02",
@@ -288,30 +298,40 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       ],
     },
     download: {
-      label: "Bản xem trước cho máy tính",
+      label: "Ứng dụng máy tính",
       title: "Tro dành cho Mac và Windows.",
-      body: "Chọn phiên bản phù hợp để nhận hướng dẫn bằng giọng nói và ngay trên màn hình khi bạn đang học.",
+      body: "Chọn đúng phiên bản cho máy của bạn để nhận hướng dẫn bằng giọng nói và ngay trên màn hình khi đang học.",
       versionLabel: "Phiên bản",
-      version: "0.1.0 preview",
+      version: "0.1.3",
       platformLabel: "Hệ điều hành",
       platform: "macOS + Windows",
       sizeLabel: "Tình trạng",
-      size: "Mac có sẵn · Windows sắp ra mắt",
-      allPlatformsAvailable: "Mac và Windows có sẵn",
-      previewPlatformsAvailable: "Bản xem trước chưa ký cho Mac và Windows",
+      size: "Đang tải thông tin bản phát hành",
+      allPlatformsAvailable: "Mac Apple silicon, Mac Intel và Windows có sẵn",
+      previewPlatformsAvailable: "Có bản xem trước chưa ký cho máy tính",
       previewStatus: "Bản xem trước",
       unsignedPreviewStatus: "Bản xem trước chưa ký",
       platformsLabel: "Chọn phiên bản Tro cho máy tính",
       platforms: {
-        macos: {
+        macosApple: {
           badge: "MAC",
-          name: "macOS",
+          name: "macOS · Apple",
           requirements: "macOS 13+ · Apple silicon",
           size: "139 MB ZIP",
           status: "Sắp ra mắt",
           cta: "Mac sắp ra mắt",
           availableStatus: "Có sẵn",
           availableCta: "Tải Tro cho Mac",
+        },
+        macosIntel: {
+          badge: "MAC",
+          name: "macOS · Intel",
+          requirements: "macOS 13+ · Intel",
+          size: "Bản x64",
+          status: "Sắp ra mắt",
+          cta: "Mac Intel sắp ra mắt",
+          availableStatus: "Có sẵn",
+          availableCta: "Tải Tro cho Mac Intel",
         },
         windows: {
           badge: "WIN",
@@ -330,7 +350,7 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       unsignedPreviewWarning:
         "Các bản Mac và Windows hiện là bản xem trước chưa ký. macOS Gatekeeper hoặc Windows SmartScreen có thể hiển thị cảnh báo trước khi cài đặt.",
       signingDisclosure:
-        "Bản Mac ổn định sẽ dùng Apple Developer ID và notarization; bản Windows ổn định sẽ dùng SignPath.io, chứng thư bởi SignPath Foundation.",
+        "Bản Mac ổn định dùng Apple Developer ID và notarization; bản Windows ổn định dùng SignPath.io, chứng thư bởi SignPath Foundation.",
       codeSigningPolicy: "Chính sách ký mã (Code signing policy)",
       privacyPolicy: "Chính sách quyền riêng tư",
     },
@@ -348,7 +368,7 @@ export const siteCopy: Record<Locale, SiteCopy> = {
     meta: {
       title: "Tro — Study easier. Become your best.",
       description:
-        "Tro is the Vietnamese-first desktop tutor that sees your screen, listens to your question, and guides the next step.",
+        "Tro is the Vietnamese-first desktop tutor that understands the app you have open, listens to your question, and guides the next step.",
     },
     language: {
       label: "Choose language",
@@ -382,11 +402,11 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       codeValue: "easy",
       tagline: "study easy. become your best.",
       description:
-        "A Vietnamese-first study buddy that sees your screen, listens when you are stuck, and walks you through the next step.",
+        "A Vietnamese-first study buddy that understands the app you have open, listens when you are stuck, and walks you through the next step.",
       primaryCta: "see tro work",
       secondaryCta: "why students use tro",
       shortcutPrefix: "Press",
-      shortcutSuffix: "anywhere · macOS 14.2+",
+      shortcutSuffix: "anywhere · macOS 13+ · Windows 10/11",
       noteWindow: "tro says",
       noteKicker: "Not another answer box.",
       noteBody: "A tutor that meets you on the screen.",
@@ -458,8 +478,8 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       features: [
         {
           number: "01",
-          title: "Sees your context",
-          body: "Share the screen only when you ask. Tro understands the task in front of you.",
+          title: "Understands the open screen",
+          body: "When a task needs the screen, Tro observes the active app first, asks before consequential changes, and shows a colored border while it is in control.",
         },
         {
           number: "02",
@@ -474,30 +494,41 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       ],
     },
     download: {
-      label: "Desktop preview",
+      label: "Desktop app",
       title: "Tro for Mac and Windows.",
-      body: "Choose the desktop version for voice and on-screen guidance while you study.",
+      body: "Choose the right build for your computer to get voice and on-screen guidance while you study.",
       versionLabel: "Version",
-      version: "0.1.0 preview",
+      version: "0.1.3",
       platformLabel: "Systems",
       platform: "macOS + Windows",
       sizeLabel: "Availability",
-      size: "Mac available · Windows coming soon",
-      allPlatformsAvailable: "Mac and Windows available",
-      previewPlatformsAvailable: "Unsigned previews for Mac and Windows",
+      size: "Loading release information",
+      allPlatformsAvailable:
+        "Apple silicon Mac, Intel Mac, and Windows available",
+      previewPlatformsAvailable: "Unsigned desktop previews available",
       previewStatus: "Preview",
       unsignedPreviewStatus: "Unsigned preview",
       platformsLabel: "Choose a Tro desktop version",
       platforms: {
-        macos: {
+        macosApple: {
           badge: "MAC",
-          name: "macOS",
+          name: "macOS · Apple",
           requirements: "macOS 13+ · Apple silicon",
           size: "139 MB ZIP",
           status: "Coming soon",
           cta: "Mac coming soon",
           availableStatus: "Available",
           availableCta: "Download Tro for Mac",
+        },
+        macosIntel: {
+          badge: "MAC",
+          name: "macOS · Intel",
+          requirements: "macOS 13+ · Intel",
+          size: "x64 build",
+          status: "Coming soon",
+          cta: "Intel Mac coming soon",
+          availableStatus: "Available",
+          availableCta: "Download Tro for Intel Mac",
         },
         windows: {
           badge: "WIN",
@@ -516,7 +547,7 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       unsignedPreviewWarning:
         "The current Mac and Windows builds are unsigned previews. macOS Gatekeeper or Windows SmartScreen may warn before installation.",
       signingDisclosure:
-        "Stable Mac builds will use Apple Developer ID and notarization; stable Windows builds will use SignPath.io, certificate by SignPath Foundation.",
+        "Stable Mac builds use Apple Developer ID and notarization; stable Windows builds use SignPath.io, certificate by SignPath Foundation.",
       codeSigningPolicy: "Code signing policy",
       privacyPolicy: "Privacy policy",
     },

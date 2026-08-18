@@ -7,7 +7,8 @@ const RELEASE_DOWNLOAD_PATH =
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const downloadRoutes = {
-  macos: "/downloads/latest/macos-arm64",
+  macosApple: "/downloads/latest/macos-arm64",
+  macosIntel: "/downloads/latest/macos-x64",
   windows: "/downloads/latest/windows-x64",
 };
 
@@ -53,12 +54,12 @@ function releaseAsset(value) {
   };
 }
 
-function findMacOSAsset(assets) {
+function findMacOSAsset(assets, architecture) {
   return assets.find((asset) => {
     const name = asset.name.toLowerCase();
     return (
       name.endsWith(".zip") &&
-      name.includes("arm64") &&
+      name.includes(architecture) &&
       ["darwin", "mac", "osx"].some((platform) => name.includes(platform))
     );
   });
@@ -90,25 +91,23 @@ function parseRelease(value, expectedPrerelease) {
   const assets = value.assets.map(releaseAsset).filter(Boolean);
   const version = value.tag_name.trim().replace(/^v/, "");
   if (!version) return null;
-  const macosAsset = findMacOSAsset(assets) ?? null;
+  const macosAppleAsset = findMacOSAsset(assets, "arm64") ?? null;
+  const macosIntelAsset = findMacOSAsset(assets, "x64") ?? null;
   const windowsAsset = findWindowsAsset(assets) ?? null;
+  const releaseTarget = (asset) =>
+    asset
+      ? {
+          ...asset,
+          channel: expectedPrerelease ? "unsigned-preview" : "stable",
+          version,
+        }
+      : null;
 
   return {
     platforms: {
-      macos: macosAsset
-        ? {
-            ...macosAsset,
-            channel: expectedPrerelease ? "unsigned-preview" : "stable",
-            version,
-          }
-        : null,
-      windows: windowsAsset
-        ? {
-            ...windowsAsset,
-            channel: expectedPrerelease ? "unsigned-preview" : "stable",
-            version,
-          }
-        : null,
+      macosApple: releaseTarget(macosAppleAsset),
+      macosIntel: releaseTarget(macosIntelAsset),
+      windows: releaseTarget(windowsAsset),
     },
     publishedAt:
       typeof value.published_at === "string" ? value.published_at : null,
@@ -131,7 +130,13 @@ export function parsePreviewReleases(value) {
 
   for (const candidate of value) {
     const release = parseRelease(candidate, true);
-    if (release?.platforms.macos || release?.platforms.windows) return release;
+    if (
+      release?.platforms.macosApple ||
+      release?.platforms.macosIntel ||
+      release?.platforms.windows
+    ) {
+      return release;
+    }
   }
 
   return null;
@@ -144,7 +149,10 @@ function mergeReleaseChannels(stable, preview) {
 
   return {
     platforms: {
-      macos: stable?.platforms.macos ?? preview?.platforms.macos ?? null,
+      macosApple:
+        stable?.platforms.macosApple ?? preview?.platforms.macosApple ?? null,
+      macosIntel:
+        stable?.platforms.macosIntel ?? preview?.platforms.macosIntel ?? null,
       windows: stable?.platforms.windows ?? preview?.platforms.windows ?? null,
     },
     publishedAt: stable?.publishedAt ?? preview?.publishedAt ?? null,
@@ -155,12 +163,20 @@ function mergeReleaseChannels(stable, preview) {
 export function publicDownloadMetadata(release) {
   return {
     platforms: {
-      macos: release.platforms.macos
+      macosApple: release.platforms.macosApple
         ? {
-            channel: release.platforms.macos.channel,
-            href: downloadRoutes.macos,
-            sizeBytes: release.platforms.macos.size,
-            version: release.platforms.macos.version,
+            channel: release.platforms.macosApple.channel,
+            href: downloadRoutes.macosApple,
+            sizeBytes: release.platforms.macosApple.size,
+            version: release.platforms.macosApple.version,
+          }
+        : null,
+      macosIntel: release.platforms.macosIntel
+        ? {
+            channel: release.platforms.macosIntel.channel,
+            href: downloadRoutes.macosIntel,
+            sizeBytes: release.platforms.macosIntel.size,
+            version: release.platforms.macosIntel.version,
           }
         : null,
       windows: release.platforms.windows
@@ -191,7 +207,13 @@ async function requestLatestRelease(fetchImplementation) {
   let stable = null;
   if (stableResponse.ok) {
     stable = parseLatestRelease(await stableResponse.json());
-    if (stable.platforms.macos && stable.platforms.windows) return stable;
+    if (
+      stable.platforms.macosApple &&
+      stable.platforms.macosIntel &&
+      stable.platforms.windows
+    ) {
+      return stable;
+    }
   } else if (stableResponse.status !== 404) {
     throw new Error(
       `GitHub latest-release request failed with ${stableResponse.status}.`,
@@ -245,7 +267,12 @@ export function resetReleaseCache() {
 }
 
 export function releaseDownload(release, pathname) {
-  if (pathname === downloadRoutes.macos) return release.platforms.macos;
+  if (pathname === downloadRoutes.macosApple) {
+    return release.platforms.macosApple;
+  }
+  if (pathname === downloadRoutes.macosIntel) {
+    return release.platforms.macosIntel;
+  }
   if (pathname === downloadRoutes.windows) return release.platforms.windows;
   return null;
 }

@@ -353,13 +353,18 @@ const privacyPolicyUrl =
   "https://github.com/ducnguyen67201/TroCode/blob/main/PRIVACY.md";
 const bundledDownloads: DownloadManifest = {
   platforms: {
-    macos: null,
+    macosApple: null,
+    macosIntel: null,
     windows: null,
   },
   version: null,
 };
 
-const downloadPlatformOrder: DownloadPlatform[] = ["macos", "windows"];
+const downloadPlatformOrder: DownloadPlatform[] = [
+  "macosApple",
+  "macosIntel",
+  "windows",
+];
 
 function downloadTarget(value: unknown): DownloadTarget | null {
   if (!value || typeof value !== "object") return null;
@@ -414,7 +419,8 @@ function useLatestDownloads(): DownloadManifest {
 
         setManifest({
           platforms: {
-            macos: downloadTarget(platformValues.macos),
+            macosApple: downloadTarget(platformValues.macosApple),
+            macosIntel: downloadTarget(platformValues.macosIntel),
             windows: downloadTarget(platformValues.windows),
           },
           version,
@@ -557,7 +563,9 @@ function DownloadSection({
   copy: SiteCopy["download"];
   manifest: DownloadManifest;
 }) {
-  const windowsAvailable = Boolean(manifest.platforms.windows);
+  const allPlatformsAvailable = downloadPlatformOrder.every((platform) =>
+    Boolean(manifest.platforms[platform]),
+  );
   const hasUnsignedPreview = downloadPlatformOrder.some(
     (platform) => manifest.platforms[platform]?.channel === "unsigned-preview",
   );
@@ -586,7 +594,7 @@ function DownloadSection({
             <dd>
               {hasUnsignedPreview
                 ? copy.previewPlatformsAvailable
-                : windowsAvailable
+                : allPlatformsAvailable
                   ? copy.allPlatformsAvailable
                   : copy.size}
             </dd>
