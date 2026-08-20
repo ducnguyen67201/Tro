@@ -443,6 +443,11 @@ function fileSize(target: DownloadTarget | null, fallback: string): string {
   return `${Math.ceil(target.sizeBytes / (1024 * 1024))} MB`;
 }
 
+function displayVersion(version: string | null, fallback: string): string {
+  if (!version) return fallback;
+  return `v${version.replace(/-signpath-bootstrap\.\d+$/, "")}`;
+}
+
 function platformPresentation(
   copy: SiteCopy["download"],
   platform: DownloadPlatform,
@@ -583,7 +588,7 @@ function DownloadSection({
         <dl className="download-facts">
           <div>
             <dt>{copy.versionLabel}</dt>
-            <dd>{manifest.version ? `v${manifest.version}` : copy.version}</dd>
+            <dd>{displayVersion(manifest.version, copy.version)}</dd>
           </div>
           <div>
             <dt>{copy.platformLabel}</dt>
