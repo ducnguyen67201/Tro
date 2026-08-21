@@ -1,19 +1,9 @@
-export type DemoPhase =
-  | "idle"
-  | "targeting"
-  | "listening"
-  | "thinking"
-  | "solved";
+export type DemoPlaybackState = "ready" | "playing" | "paused" | "ended";
 
 export type Locale = "vi" | "en";
 
 type Feature = {
   number: string;
-  title: string;
-  body: string;
-};
-
-type Step = {
   title: string;
   body: string;
 };
@@ -77,25 +67,17 @@ export type SiteCopy = {
   demo: {
     label: string;
     title: string;
-    statuses: Record<DemoPhase, string>;
+    statuses: Record<DemoPlaybackState, string>;
+    play: string;
+    playLabel: string;
     replay: string;
     replayLabel: string;
-    address: string;
-    progress: string;
-    questionNumber: string;
-    points: string;
-    topic: string;
-    question: string;
-    answers: [string, string, string];
-    listening: string;
-    voicePrompt: string;
-    thinking: string;
-    understood: string;
-    solutionEyebrow: string;
-    solutionTitle: string;
-    steps: [Step, Step, Step];
-    answer: string;
-    encouragement: string;
+    footageLabel: string;
+    duration: string;
+    videoLabel: string;
+    fallback: string;
+    chaptersLabel: string;
+    chapters: [string, string];
   };
   principles: {
     label: string;
@@ -235,46 +217,25 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       ],
     },
     demo: {
-      label: "Một phím tắt. Một bước tiếp theo thật rõ.",
-      title: "Trợ giúp, ngay nơi bạn cần.",
+      label: "Cảnh quay thật. Thao tác thật.",
+      title: "Xem Tro làm việc thật.",
       statuses: {
-        idle: "Tro đã sẵn sàng",
-        targeting: "Tro thấy chỗ bạn đang vướng",
-        listening: "Đang nghe câu hỏi của bạn…",
-        thinking: "Đang biến màn hình thành lời giải thích dễ hiểu…",
-        solved: "Bạn đã có bước tiếp theo",
+        ready: "Video sẵn sàng",
+        playing: "Đang phát demo thật",
+        paused: "Video đã tạm dừng",
+        ended: "Bạn đã xem xong",
       },
+      play: "Phát video",
+      playLabel: "Phát video demo Tro",
       replay: "Xem lại",
-      replayLabel: "Xem lại phần minh họa Tro",
-      address: "uni.portal / giải-tích / bài-tập-04",
-      progress: "4 / 10",
-      questionNumber: "Câu 04",
-      points: "1 điểm",
-      topic: "HÀM BẬC HAI",
-      question: "Đồ thị nào khớp với hàm số dưới đây?",
-      answers: ["Đỉnh tại (−2, 1)", "Đỉnh tại (2, 1)", "Đỉnh tại (1, 2)"],
-      listening: "Đang lắng nghe",
-      voicePrompt: "“Em không biết bắt đầu từ đâu…”",
-      thinking: "Đang đọc phương trình",
-      understood: "Đã hiểu",
-      solutionEyebrow: "Cùng làm thật đơn giản",
-      solutionTitle: "Đọc tọa độ đỉnh ngay từ phương trình.",
-      steps: [
-        {
-          title: "Nhận ra dạng bài",
-          body: "Dạng đỉnh là f(x) = (x − h)² + k.",
-        },
-        {
-          title: "Đối chiếu giá trị",
-          body: "Ở đây, h = 2 và k = 1.",
-        },
-        {
-          title: "Tự tin chọn đáp án",
-          body: "Đồ thị có đỉnh tại (2, 1).",
-        },
-      ],
-      answer: "Đáp án",
-      encouragement: "Giờ hãy tự thử câu tiếp theo nhé.",
+      replayLabel: "Phát lại video demo Tro từ đầu",
+      footageLabel: "CẢNH QUAY THẬT",
+      duration: "31 GIÂY",
+      videoLabel:
+        "Tro thao tác trực tiếp trên Scratch và Google Sheets bằng hướng dẫn tiếng Việt.",
+      fallback: "Trình duyệt của bạn không hỗ trợ video này.",
+      chaptersLabel: "Nội dung video",
+      chapters: ["01 · Scratch", "02 · Google Sheets"],
     },
     principles: {
       label: "Dành cho khoảnh khắc bạn suýt bỏ cuộc.",
@@ -431,46 +392,25 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       ],
     },
     demo: {
-      label: "One shortcut. One clear next step.",
-      title: "Help, right where you need it.",
+      label: "Real footage. Real actions.",
+      title: "See Tro work for real.",
       statuses: {
-        idle: "Tro is ready",
-        targeting: "Tro sees where you are stuck",
-        listening: "Listening to your question…",
-        thinking: "Turning the screen into a clear explanation…",
-        solved: "You have the next step",
+        ready: "Video ready",
+        playing: "Playing the real demo",
+        paused: "Video paused",
+        ended: "Demo complete",
       },
+      play: "Play video",
+      playLabel: "Play the Tro demo video",
       replay: "Replay",
-      replayLabel: "Replay the Tro demonstration",
-      address: "uni.portal / calculus / practice-04",
-      progress: "4 of 10",
-      questionNumber: "Question 04",
-      points: "1 point",
-      topic: "QUADRATIC FUNCTIONS",
-      question: "Which graph matches the function below?",
-      answers: ["Vertex at (−2, 1)", "Vertex at (2, 1)", "Vertex at (1, 2)"],
-      listening: "Listening",
-      voicePrompt: "“I don’t know where to start…”",
-      thinking: "Reading the equation",
-      understood: "Understood",
-      solutionEyebrow: "Let’s make it simple",
-      solutionTitle: "Read the vertex directly from the equation.",
-      steps: [
-        {
-          title: "Spot the pattern",
-          body: "Vertex form is f(x) = (x − h)² + k.",
-        },
-        {
-          title: "Match the values",
-          body: "Here, h = 2 and k = 1.",
-        },
-        {
-          title: "Choose with confidence",
-          body: "The graph has its vertex at (2, 1).",
-        },
-      ],
-      answer: "Answer",
-      encouragement: "Now try the next one yourself.",
+      replayLabel: "Replay the Tro demo video from the beginning",
+      footageLabel: "REAL APP FOOTAGE",
+      duration: "31 SECONDS",
+      videoLabel:
+        "Tro works directly in Scratch and Google Sheets with Vietnamese guidance.",
+      fallback: "Your browser does not support this video.",
+      chaptersLabel: "Video chapters",
+      chapters: ["01 · Scratch", "02 · Google Sheets"],
     },
     principles: {
       label: "Made for the moment you almost give up.",
