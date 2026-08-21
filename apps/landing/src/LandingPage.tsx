@@ -1,19 +1,10 @@
-import { useEffect, useState } from "react";
-import { siteCopy, type DemoPhase, type Locale, type SiteCopy } from "./copy";
-
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-
-  useEffect(() => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => setReduced(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
-
-  return reduced;
-}
+import { useEffect, useRef, useState } from "react";
+import {
+  siteCopy,
+  type DemoPlaybackState,
+  type Locale,
+  type SiteCopy,
+} from "./copy";
 
 function TroMark() {
   return (
@@ -93,33 +84,16 @@ function MacControls() {
   );
 }
 
-function ComputerUseDemo({ copy }: { copy: SiteCopy["demo"] }) {
-  const reducedMotion = usePrefersReducedMotion();
-  const [phase, setPhase] = useState<DemoPhase>("idle");
-  const [run, setRun] = useState(0);
-  const activePhase: DemoPhase = reducedMotion ? "solved" : phase;
+function ProductDemo({ copy }: { copy: SiteCopy["demo"] }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [playback, setPlayback] = useState<DemoPlaybackState>("ready");
 
-  const replay = () => {
-    setPhase("idle");
-    setRun((value) => value + 1);
+  const playFromStart = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.currentTime = 0;
+    void video.play().catch(() => setPlayback("ready"));
   };
-
-  useEffect(() => {
-    if (reducedMotion) return;
-
-    const timers = [
-      window.setTimeout(() => setPhase("targeting"), 350),
-      window.setTimeout(() => setPhase("listening"), 2_250),
-      window.setTimeout(() => setPhase("thinking"), 4_300),
-      window.setTimeout(() => setPhase("solved"), 5_650),
-      window.setTimeout(() => {
-        setPhase("idle");
-        setRun((value) => value + 1);
-      }, 10_500),
-    ];
-
-    return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [reducedMotion, run]);
 
   return (
     <section className="demo-section" id="demo" aria-labelledby="demo-title">
@@ -129,148 +103,59 @@ function ComputerUseDemo({ copy }: { copy: SiteCopy["demo"] }) {
           <h2 id="demo-title">{copy.title}</h2>
         </div>
         <div className="demo-status" aria-live="polite">
-          <span className={`status-dot status-dot--${activePhase}`} />
-          <span>{copy.statuses[activePhase]}</span>
+          <span className={`status-dot status-dot--${playback}`} />
+          <span>{copy.statuses[playback]}</span>
           <button
             type="button"
             className="replay-button"
-            onClick={replay}
-            aria-label={copy.replayLabel}
+            onClick={playFromStart}
+            aria-label={
+              playback === "ready" ? copy.playLabel : copy.replayLabel
+            }
           >
-            {copy.replay}
+            {playback === "ready" ? copy.play : copy.replay}
           </button>
         </div>
       </div>
 
-      <div className="computer-window" data-phase={activePhase}>
-        <div className="window-bar">
-          <div className="window-controls" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
-          <div className="window-address">
-            <span className="address-lock">●</span>
-            {copy.address}
-          </div>
-          <span className="window-progress">{copy.progress}</span>
+      <figure className="computer-window real-demo-frame">
+        <div className="real-demo-bar">
+          <MacControls />
+          <span className="real-demo-footage">
+            <i aria-hidden="true" />
+            {copy.footageLabel}
+          </span>
+          <span className="real-demo-duration">{copy.duration}</span>
         </div>
 
-        <div className="workspace">
-          <div className="workspace-nav" aria-hidden="true">
-            <span className="mini-brand">
-              <TroMark />
-            </span>
-            <span className="nav-line nav-line--long" />
-            <span className="nav-line" />
-            <span className="nav-line" />
-            <span className="nav-line nav-line--bottom" />
-          </div>
-
-          <article className="question-sheet">
-            <div className="question-meta">
-              <span>{copy.questionNumber}</span>
-              <span>{copy.points}</span>
-            </div>
-            <p className="question-kicker">{copy.topic}</p>
-            <h3>{copy.question}</h3>
-            <code>f(x) = (x − 2)² + 1</code>
-            <div className="answer-options" aria-hidden="true">
-              <div className="answer-option">
-                <span>A</span>
-                {copy.answers[0]}
-              </div>
-              <div className="answer-option target-option">
-                <span>B</span>
-                {copy.answers[1]}
-              </div>
-              <div className="answer-option">
-                <span>C</span>
-                {copy.answers[2]}
-              </div>
-            </div>
-          </article>
-
-          <div
-            className="listening-bubble"
-            aria-hidden={activePhase !== "listening"}
+        <div className="real-demo-media">
+          <video
+            ref={videoRef}
+            controls
+            playsInline
+            preload="metadata"
+            poster="/demo/tro-real-footage-vi-v1.jpg"
+            aria-label={copy.videoLabel}
+            onPlay={() => setPlayback("playing")}
+            onPause={() => {
+              if (!videoRef.current?.ended) setPlayback("paused");
+            }}
+            onEnded={() => setPlayback("ended")}
           >
-            <span className="mic-icon">
-              <MicrophoneIcon />
-            </span>
-            <div className="listening-copy">
-              <strong>{copy.listening}</strong>
-              <span>{copy.voicePrompt}</span>
-            </div>
-            <span className="sound-wave" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-              <i />
-            </span>
-          </div>
-
-          <div
-            className="thinking-pill"
-            aria-hidden={activePhase !== "thinking"}
-          >
-            <TroMark />
-            <span>{copy.thinking}</span>
-            <i />
-            <i />
-            <i />
-          </div>
-
-          <article
-            className="solution-card"
-            aria-hidden={activePhase !== "solved"}
-          >
-            <header>
-              <span className="solution-brand">
-                <TroMark />
-                Tro
-              </span>
-              <span className="solution-check">{copy.understood}</span>
-            </header>
-            <p className="solution-eyebrow">{copy.solutionEyebrow}</p>
-            <h3>{copy.solutionTitle}</h3>
-            <ol className="abc-list">
-              <li className="abc-step abc-step--a">
-                <span>A</span>
-                <div>
-                  <strong>{copy.steps[0].title}</strong>
-                  <p>{copy.steps[0].body}</p>
-                </div>
-              </li>
-              <li className="abc-step abc-step--b">
-                <span>B</span>
-                <div>
-                  <strong>{copy.steps[1].title}</strong>
-                  <p>{copy.steps[1].body}</p>
-                </div>
-              </li>
-              <li className="abc-step abc-step--c">
-                <span>C</span>
-                <div>
-                  <strong>{copy.steps[2].title}</strong>
-                  <p>{copy.steps[2].body}</p>
-                </div>
-              </li>
-            </ol>
-            <div className="final-answer">
-              <span>{copy.answer}</span>
-              <strong>B</strong>
-              <p>{copy.encouragement}</p>
-            </div>
-          </article>
-
-          <div className="simulated-cursor" aria-hidden="true">
-            <span className="cursor-ripple" />
-            <PointerIcon />
-            <span className="cursor-tag">Tro</span>
-          </div>
+            <source src="/demo/tro-real-footage-vi-v1.mp4" type="video/mp4" />
+            {copy.fallback}
+          </video>
         </div>
-      </div>
+
+        <figcaption className="real-demo-caption">
+          <p>{copy.videoLabel}</p>
+          <ol aria-label={copy.chaptersLabel}>
+            {copy.chapters.map((chapter) => (
+              <li key={chapter}>{chapter}</li>
+            ))}
+          </ol>
+        </figcaption>
+      </figure>
     </section>
   );
 }
@@ -870,7 +755,7 @@ export function LandingPage() {
 
       <PartnersSection copy={copy.partners} />
 
-      <ComputerUseDemo copy={copy.demo} />
+      <ProductDemo copy={copy.demo} />
 
       <section
         className="principles"

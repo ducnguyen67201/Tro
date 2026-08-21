@@ -23,6 +23,7 @@ const contentTypes = {
   ".jpg": "image/jpeg",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".mp4": "video/mp4",
   ".png": "image/png",
   ".svg": "image/svg+xml; charset=utf-8",
   ".webp": "image/webp",
@@ -148,13 +149,80 @@ const server = createServer(async (request, response) => {
   const extension = extname(filePath).toLowerCase();
   const isImmutableAsset =
     requestUrl.pathname.startsWith("/assets/") ||
+    requestUrl.pathname.startsWith("/demo/") ||
     requestUrl.pathname.startsWith("/downloads/");
 
-  response.writeHead(200, {
+  const fileStat = await stat(filePath);
+  const fileSize = fileStat.size;
+  const rangeHeader = request.headers.range;
+  let rangeStart = 0;
+  let rangeEnd = Math.max(fileSize - 1, 0);
+  let statusCode = 200;
+
+  if (rangeHeader && fileSize > 0) {
+    const rangeMatch = /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim());
+    const startText = rangeMatch?.[1] ?? "";
+    const endText = rangeMatch?.[2] ?? "";
+
+    if (!rangeMatch || (!startText && !endText)) {
+      response.writeHead(416, {
+        ...securityHeaders,
+        "Content-Range": `bytes */${fileSize}`,
+      });
+      response.end();
+      return;
+    }
+
+    if (!startText) {
+      const suffixLength = Number.parseInt(endText, 10);
+      if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) {
+        response.writeHead(416, {
+          ...securityHeaders,
+          "Content-Range": `bytes */${fileSize}`,
+        });
+        response.end();
+        return;
+      }
+      rangeStart = Math.max(fileSize - suffixLength, 0);
+    } else {
+      rangeStart = Number.parseInt(startText, 10);
+    }
+
+    rangeEnd = endText
+      ? Math.min(Number.parseInt(endText, 10), fileSize - 1)
+      : fileSize - 1;
+
+    if (
+      !Number.isSafeInteger(rangeStart) ||
+      !Number.isSafeInteger(rangeEnd) ||
+      rangeStart < 0 ||
+      rangeStart >= fileSize ||
+      rangeEnd < rangeStart
+    ) {
+      response.writeHead(416, {
+        ...securityHeaders,
+        "Content-Range": `bytes */${fileSize}`,
+      });
+      response.end();
+      return;
+    }
+
+    statusCode = 206;
+  }
+
+  const contentLength =
+    fileSize === 0 ? 0 : Math.max(rangeEnd - rangeStart + 1, 0);
+
+  response.writeHead(statusCode, {
     ...securityHeaders,
+    "Accept-Ranges": "bytes",
     "Cache-Control": isImmutableAsset
       ? "public, max-age=31536000, immutable"
       : "no-cache",
+    "Content-Length": String(contentLength),
+    ...(statusCode === 206
+      ? { "Content-Range": `bytes ${rangeStart}-${rangeEnd}/${fileSize}` }
+      : {}),
     "Content-Type": contentTypes[extension] ?? "application/octet-stream",
   });
 
@@ -163,7 +231,10 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  const stream = createReadStream(filePath);
+  const stream = createReadStream(filePath, {
+    start: rangeStart,
+    end: rangeEnd,
+  });
   stream.on("error", () => {
     if (!response.headersSent)
       sendJson(response, 500, { error: "read_failed" });
