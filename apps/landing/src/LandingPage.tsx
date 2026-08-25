@@ -186,7 +186,14 @@ function PartnersSection({ copy }: { copy: SiteCopy["partners"] }) {
               aria-label={partner.linkLabel}
               key={partner.website}
             >
-              <span className="partner-card__logo" aria-hidden="true">
+              <span
+                className={`partner-card__logo${
+                  partner.logoFit === "contain"
+                    ? " partner-card__logo--contain"
+                    : ""
+                }`}
+                aria-hidden="true"
+              >
                 <img
                   src={partner.logo}
                   alt=""

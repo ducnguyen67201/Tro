@@ -3128,6 +3128,16 @@ footer {
   object-fit: cover;
 }
 
+.partner-card__logo--contain {
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.partner-card__logo--contain img {
+  box-sizing: border-box;
+  padding: 16px;
+  object-fit: contain;
+}
+
 .partner-card__copy {
   position: relative;
   z-index: 1;

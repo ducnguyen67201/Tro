@@ -62,6 +62,7 @@ export type SiteCopy = {
       linkLabel: string;
       website: string;
       logo: string;
+      logoFit?: "cover" | "contain";
     }>;
   };
   demo: {
@@ -213,6 +214,17 @@ export const siteCopy: Record<Locale, SiteCopy> = {
           linkLabel: "Mở trang web Just Tin English trong tab mới",
           website: "https://www.justtinenglish.com/",
           logo: "/partners/just-tin-english.png",
+        },
+        {
+          featuredLabel: "Đối tác giáo dục",
+          name: "CodeSpace",
+          description:
+            "Học viện công nghệ cho trẻ 7–16 tuổi, nơi học viên học lập trình, robotics và AI qua những dự án thực tế.",
+          visit: "Khám phá lớp học CodeSpace",
+          linkLabel: "Mở lớp học CodeSpace trong tab mới",
+          website: "https://codespace.edu.vn/they",
+          logo: "/partners/codespace.png",
+          logoFit: "contain",
         },
       ],
     },
@@ -388,6 +400,17 @@ export const siteCopy: Record<Locale, SiteCopy> = {
           linkLabel: "Open the Just Tin English website in a new tab",
           website: "https://www.justtinenglish.com/",
           logo: "/partners/just-tin-english.png",
+        },
+        {
+          featuredLabel: "Education partner",
+          name: "CodeSpace",
+          description:
+            "Technology learning for ages 7–16, with hands-on projects in programming, robotics, and AI.",
+          visit: "Explore the CodeSpace class",
+          linkLabel: "Open the CodeSpace class in a new tab",
+          website: "https://codespace.edu.vn/they",
+          logo: "/partners/codespace.png",
+          logoFit: "contain",
         },
       ],
     },
