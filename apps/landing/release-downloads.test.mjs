@@ -11,7 +11,7 @@ import {
 } from "./release-downloads.mjs";
 
 const githubAsset = (name, size = 100) => ({
-  browser_download_url: `https://github.com/ducnguyen67201/TroCode/releases/download/v0.2.0/${encodeURIComponent(name)}`,
+  browser_download_url: `https://github.com/ducnguyen67201/asdfaefqwefq/releases/download/v0.2.0/${encodeURIComponent(name)}`,
   name,
   size,
 });
