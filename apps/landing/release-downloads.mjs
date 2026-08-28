@@ -1,9 +1,9 @@
 const GITHUB_API_URL =
-  "https://api.github.com/repos/ducnguyen67201/TroCode/releases/latest";
+  "https://api.github.com/repos/ducnguyen67201/asdfaefqwefq/releases/latest";
 const GITHUB_RELEASES_API_URL =
-  "https://api.github.com/repos/ducnguyen67201/TroCode/releases?per_page=20";
+  "https://api.github.com/repos/ducnguyen67201/asdfaefqwefq/releases?per_page=20";
 const RELEASE_DOWNLOAD_PATH =
-  "/ducnguyen67201/TroCode/releases/download/".toLowerCase();
+  "/ducnguyen67201/asdfaefqwefq/releases/download/".toLowerCase();
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const downloadRoutes = {
