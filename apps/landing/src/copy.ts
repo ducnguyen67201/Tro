@@ -321,10 +321,10 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       previewNote:
         "Các nút tải tự động trỏ tới bản phát hành Tro mới nhất trên GitHub.",
       unsignedPreviewWarning:
-        "Các bản Mac và Windows hiện là bản xem trước chưa ký. macOS Gatekeeper hoặc Windows SmartScreen có thể hiển thị cảnh báo trước khi cài đặt.",
+        "Các bản Mac hiện là bản xem trước chưa ký. macOS Gatekeeper có thể hiển thị cảnh báo trước khi cài đặt.",
       signingDisclosure:
-        "Bản Mac ổn định dùng Apple Developer ID và notarization; bản Windows ổn định dùng SignPath.io, chứng thư bởi SignPath Foundation.",
-      codeSigningPolicy: "Chính sách ký mã (Code signing policy)",
+        "Bản Windows được ký qua Microsoft Azure Artifact Signing với tên nhà phát hành Minh Duc Nguyen. Windows SmartScreen vẫn có thể hiển thị cảnh báo.",
+      codeSigningPolicy: "Thông tin ký mã Windows",
       privacyPolicy: "Chính sách quyền riêng tư",
     },
     closing: {
@@ -508,10 +508,10 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       previewNote:
         "Download buttons automatically follow the latest Tro release on GitHub.",
       unsignedPreviewWarning:
-        "The current Mac and Windows builds are unsigned previews. macOS Gatekeeper or Windows SmartScreen may warn before installation.",
+        "The current Mac builds are unsigned previews. macOS Gatekeeper may warn before installation.",
       signingDisclosure:
-        "Stable Mac builds use Apple Developer ID and notarization; stable Windows builds use SignPath.io, certificate by SignPath Foundation.",
-      codeSigningPolicy: "Code signing policy",
+        "Windows builds are signed through Microsoft Azure Artifact Signing by Minh Duc Nguyen. Windows SmartScreen may still display a warning.",
+      codeSigningPolicy: "Windows signing details",
       privacyPolicy: "Privacy policy",
     },
     closing: {

@@ -29,6 +29,19 @@ const releasePayload = () => ({
   tag_name: "v0.2.0",
 });
 
+const windowsPayload = () => ({
+  ...releasePayload(),
+  tag_name: "v0.1.0",
+  assets: [
+    {
+      name: "Tro-0.1.0-windows-x64-setup.exe",
+      size: 350,
+      browser_download_url:
+        "https://github.com/ducnguyen67201/TroApp/releases/download/v0.1.0/Tro-0.1.0-windows-x64-setup.exe",
+    },
+  ],
+});
+
 test("selects trusted platform installers from the latest release", () => {
   const release = parseLatestRelease(releasePayload());
 
@@ -73,20 +86,25 @@ test("ignores untrusted and wrong-architecture release assets", () => {
 test("caches GitHub release requests", async () => {
   resetReleaseCache();
   let requestCount = 0;
-  const fetchImplementation = async () => {
+  const fetchImplementation = async (url) => {
     requestCount += 1;
-    return new Response(JSON.stringify(releasePayload()), {
-      headers: { "Content-Type": "application/json" },
-      status: 200,
-    });
+    return new Response(
+      JSON.stringify(
+        url.includes("/TroApp/") ? windowsPayload() : releasePayload(),
+      ),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      },
+    );
   };
 
   await latestRelease({ fetchImplementation, now: () => 1_000 });
   await latestRelease({ fetchImplementation, now: () => 1_001 });
-  assert.equal(requestCount, 1);
+  assert.equal(requestCount, 2);
 });
 
-test("uses a clearly marked unsigned preview when no stable release exists", async () => {
+test("keeps legacy Mac previews and resolves signed Windows previews from TroApp", async () => {
   resetReleaseCache();
   const preview = releasePayload();
   preview.prerelease = true;
@@ -96,10 +114,17 @@ test("uses a clearly marked unsigned preview when no stable release exists", asy
   const fetchImplementation = async (url) => {
     requests.push(url);
     if (url.endsWith("/latest")) return new Response(null, { status: 404 });
-    return new Response(JSON.stringify([preview]), {
-      headers: { "Content-Type": "application/json" },
-      status: 200,
-    });
+    return new Response(
+      JSON.stringify([
+        url.includes("/TroApp/")
+          ? { ...windowsPayload(), prerelease: true }
+          : preview,
+      ]),
+      {
+        headers: { "Content-Type": "application/json" },
+        status: 200,
+      },
+    );
   };
 
   const release = await latestRelease({
@@ -108,7 +133,7 @@ test("uses a clearly marked unsigned preview when no stable release exists", asy
   });
   const metadata = publicDownloadMetadata(release);
 
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 4);
   assert.equal(metadata.platforms.macosApple?.channel, "unsigned-preview");
   assert.deepEqual(metadata.platforms.macosIntel, {
     channel: "unsigned-preview",
@@ -117,11 +142,19 @@ test("uses a clearly marked unsigned preview when no stable release exists", asy
     version: "0.2.0-signpath-bootstrap.14",
   });
   assert.deepEqual(metadata.platforms.windows, {
-    channel: "unsigned-preview",
+    channel: "preview",
     href: "/downloads/latest/windows-x64",
-    sizeBytes: 300,
-    version: "0.2.0-signpath-bootstrap.14",
+    sizeBytes: 350,
+    version: "0.1.0",
   });
+  assert.equal(
+    release.platforms.windows.url,
+    windowsPayload().assets[0].browser_download_url,
+  );
+  assert.equal(
+    release.platforms.macosApple.url,
+    preview.assets[0].browser_download_url,
+  );
 });
 
 test("ignores drafts and stable entries in the preview release list", () => {
@@ -137,4 +170,48 @@ test("ignores drafts and stable entries in the preview release list", () => {
     parsePreviewReleases([draft, stable, preview])?.version,
     "0.3.0-preview.1",
   );
+});
+
+test("selects Windows stable releases independently of newer legacy Windows assets", async () => {
+  resetReleaseCache();
+  const fetchImplementation = async (url) =>
+    new Response(
+      JSON.stringify(
+        url.includes("/TroApp/") ? windowsPayload() : releasePayload(),
+      ),
+    );
+  const release = await latestRelease({ fetchImplementation });
+  assert.equal(release.platforms.windows.version, "0.1.0");
+  assert.equal(release.platforms.windows.channel, "stable");
+  assert.equal(release.platforms.macosApple.version, "0.2.0");
+  assert.equal(release.platforms.macosIntel.version, "0.2.0");
+});
+
+test("rejects cross-repository Windows URLs without falling back to legacy installers", async () => {
+  resetReleaseCache();
+  const fetchImplementation = async (url) =>
+    new Response(
+      JSON.stringify(url.endsWith("/latest") ? releasePayload() : []),
+    );
+  const release = await latestRelease({ fetchImplementation });
+  assert.equal(release.platforms.windows, null);
+  assert.ok(release.platforms.macosApple);
+});
+
+test("retains cached downloads when a repository request fails", async () => {
+  resetReleaseCache();
+  const release = await latestRelease({
+    fetchImplementation: async (url) =>
+      new Response(
+        JSON.stringify(
+          url.includes("/TroApp/") ? windowsPayload() : releasePayload(),
+        ),
+      ),
+    now: () => 1_000,
+  });
+  const cached = await latestRelease({
+    fetchImplementation: async () => new Response(null, { status: 503 }),
+    now: () => 400_000,
+  });
+  assert.deepEqual(cached, release);
 });
