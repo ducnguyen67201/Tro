@@ -1,9 +1,18 @@
-const GITHUB_API_URL =
-  "https://api.github.com/repos/ducnguyen67201/asdfaefqwefq/releases/latest";
-const GITHUB_RELEASES_API_URL =
-  "https://api.github.com/repos/ducnguyen67201/asdfaefqwefq/releases?per_page=20";
-const RELEASE_DOWNLOAD_PATH =
-  "/ducnguyen67201/asdfaefqwefq/releases/download/".toLowerCase();
+/** @typedef {{ repository: string, previewChannel: string, platforms: string[] }} ReleaseSource */
+
+/** @type {ReleaseSource} */
+const macReleaseSource = {
+  repository: "ducnguyen67201/asdfaefqwefq",
+  previewChannel: "unsigned-preview",
+  platforms: ["macosApple", "macosIntel"],
+};
+
+/** @type {ReleaseSource} */
+const windowsReleaseSource = {
+  repository: "ducnguyen67201/TroApp",
+  previewChannel: "preview",
+  platforms: ["windows"],
+};
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const downloadRoutes = {
@@ -20,7 +29,7 @@ function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function releaseAsset(value) {
+function releaseAsset(value, source) {
   if (!isRecord(value)) return null;
   if (
     typeof value.name !== "string" ||
@@ -42,7 +51,9 @@ function releaseAsset(value) {
   if (
     downloadUrl.protocol !== "https:" ||
     downloadUrl.hostname !== "github.com" ||
-    !downloadUrl.pathname.toLowerCase().startsWith(RELEASE_DOWNLOAD_PATH)
+    !downloadUrl.pathname
+      .toLowerCase()
+      .startsWith(`/${source.repository}/releases/download/`.toLowerCase())
   ) {
     return null;
   }
@@ -77,7 +88,7 @@ function findWindowsAsset(assets) {
   });
 }
 
-function parseRelease(value, expectedPrerelease) {
+function parseRelease(value, expectedPrerelease, source) {
   if (
     !isRecord(value) ||
     value.draft === true ||
@@ -88,7 +99,9 @@ function parseRelease(value, expectedPrerelease) {
     return null;
   }
 
-  const assets = value.assets.map(releaseAsset).filter(Boolean);
+  const assets = value.assets
+    .map((asset) => releaseAsset(asset, source))
+    .filter(Boolean);
   const version = value.tag_name.trim().replace(/^v/, "");
   if (!version) return null;
   const macosAppleAsset = findMacOSAsset(assets, "arm64") ?? null;
@@ -98,7 +111,7 @@ function parseRelease(value, expectedPrerelease) {
     asset
       ? {
           ...asset,
-          channel: expectedPrerelease ? "unsigned-preview" : "stable",
+          channel: expectedPrerelease ? source.previewChannel : "stable",
           version,
         }
       : null;
@@ -115,26 +128,22 @@ function parseRelease(value, expectedPrerelease) {
   };
 }
 
-export function parseLatestRelease(value) {
-  const release = parseRelease(value, false);
+export function parseLatestRelease(value, source = macReleaseSource) {
+  const release = parseRelease(value, false, source);
   if (!release) {
     throw new Error("GitHub returned invalid latest-release metadata.");
   }
   return release;
 }
 
-export function parsePreviewReleases(value) {
+export function parsePreviewReleases(value, source = macReleaseSource) {
   if (!Array.isArray(value)) {
     throw new Error("GitHub returned invalid release-list metadata.");
   }
 
   for (const candidate of value) {
-    const release = parseRelease(candidate, true);
-    if (
-      release?.platforms.macosApple ||
-      release?.platforms.macosIntel ||
-      release?.platforms.windows
-    ) {
+    const release = parseRelease(candidate, true, source);
+    if (source.platforms.some((platform) => release?.platforms[platform])) {
       return release;
     }
   }
@@ -193,7 +202,8 @@ export function publicDownloadMetadata(release) {
   };
 }
 
-async function requestLatestRelease(fetchImplementation) {
+async function requestSourceRelease(fetchImplementation, source) {
+  const releasesUrl = `https://api.github.com/repos/${source.repository}/releases`;
   const headers = {
     Accept: "application/vnd.github+json",
     "User-Agent": "Tro-landing-download-resolver",
@@ -203,15 +213,13 @@ async function requestLatestRelease(fetchImplementation) {
     headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   }
 
-  const stableResponse = await fetchImplementation(GITHUB_API_URL, { headers });
+  const stableResponse = await fetchImplementation(`${releasesUrl}/latest`, {
+    headers,
+  });
   let stable = null;
   if (stableResponse.ok) {
-    stable = parseLatestRelease(await stableResponse.json());
-    if (
-      stable.platforms.macosApple &&
-      stable.platforms.macosIntel &&
-      stable.platforms.windows
-    ) {
+    stable = parseLatestRelease(await stableResponse.json(), source);
+    if (source.platforms.every((platform) => stable.platforms[platform])) {
       return stable;
     }
   } else if (stableResponse.status !== 404) {
@@ -220,9 +228,12 @@ async function requestLatestRelease(fetchImplementation) {
     );
   }
 
-  const releasesResponse = await fetchImplementation(GITHUB_RELEASES_API_URL, {
-    headers,
-  });
+  const releasesResponse = await fetchImplementation(
+    `${releasesUrl}?per_page=20`,
+    {
+      headers,
+    },
+  );
   if (!releasesResponse.ok) {
     throw new Error(
       `GitHub release-list request failed with ${releasesResponse.status}.`,
@@ -231,8 +242,25 @@ async function requestLatestRelease(fetchImplementation) {
 
   return mergeReleaseChannels(
     stable,
-    parsePreviewReleases(await releasesResponse.json()),
+    parsePreviewReleases(await releasesResponse.json(), source),
   );
+}
+
+/** Keep each platform tied to its release owner; never fall back to legacy Windows builds. */
+async function requestLatestRelease(fetchImplementation) {
+  const [macRelease, windowsRelease] = await Promise.all([
+    requestSourceRelease(fetchImplementation, macReleaseSource),
+    requestSourceRelease(fetchImplementation, windowsReleaseSource),
+  ]);
+  return {
+    platforms: {
+      macosApple: macRelease.platforms.macosApple,
+      macosIntel: macRelease.platforms.macosIntel,
+      windows: windowsRelease.platforms.windows,
+    },
+    publishedAt: windowsRelease.publishedAt,
+    version: windowsRelease.version,
+  };
 }
 
 export async function latestRelease({

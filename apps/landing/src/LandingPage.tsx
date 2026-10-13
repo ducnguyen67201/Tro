@@ -240,7 +240,7 @@ type DownloadManifest = {
 };
 
 const codeSigningPolicyUrl =
-  "https://github.com/ducnguyen67201/asdfaefqwefq/blob/main/CODE_SIGNING_POLICY.md";
+  "https://github.com/ducnguyen67201/TroApp/blob/main/README.md#windows-release-from-github-actions";
 const privacyPolicyUrl =
   "https://github.com/ducnguyen67201/asdfaefqwefq/blob/main/PRIVACY.md";
 const bundledDownloads: DownloadManifest = {
