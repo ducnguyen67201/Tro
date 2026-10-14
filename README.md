@@ -19,7 +19,7 @@ The development site runs at `http://127.0.0.1:4173`.
 pnpm check
 ```
 
-This checks formatting, linting, types, and the production build.
+This checks formatting, linting, types, download resolver tests, and the production build.
 
 ## Production
 
@@ -32,11 +32,23 @@ The static server listens on `0.0.0.0:4173` by default. Set `HOST` or `PORT` to 
 
 ## Desktop downloads
 
-The server resolves Windows installers from `ducnguyen67201/TroApp` GitHub
-Releases. Mac downloads continue to use `ducnguyen67201/asdfaefqwefq`.
-Publish the verified, signed Windows installer as a GitHub Release asset; Actions
-artifacts alone are temporary and cannot serve as public downloads. Windows
-prereleases are labelled previews, while legacy Mac prereleases remain labelled
-unsigned previews. Stable releases take priority over previews for each platform.
-The resolver caches metadata for five minutes and only accepts asset URLs from the
-owning repository. Windows never falls back to the legacy repository.
+The server resolves signed Mac and Windows installers from
+`ducnguyen67201/TroApp` GitHub Releases. It selects each platform's newest stable
+release independently, falling back to a preview only when that platform has no
+stable installer. A Mac-only release therefore keeps the existing Windows
+installer available. Legacy repositories are never download fallbacks.
+
+Publish the exact verified files as public GitHub Release assets; temporary
+Actions artifacts and draft releases are not public download sources. Platform
+release tags such as `macos-v0.1.0-59ccc66` leave the Windows `v0.1.0` tag intact.
+The displayed app version comes from the canonical installer filename, not the
+release tag. Mac buttons prefer DMG and fall back to ZIP; each button displays its
+actual format, size and app version. An architecture without a published asset
+stays unavailable until its verified installer is added.
+
+The resolver caches metadata for five minutes, shares one paginated GitHub release
+history across platforms, and accepts only exact asset URLs from the owning
+TroApp release. It scans at most 1,000 releases with a 10-second request timeout;
+request failures retain a previously cached successful result. Downloads are
+redirected through `/downloads/latest/macos-arm64`,
+`/downloads/latest/macos-x64`, and `/downloads/latest/windows-x64`.
