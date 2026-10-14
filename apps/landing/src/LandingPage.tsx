@@ -225,10 +225,12 @@ function PartnersSection({ copy }: { copy: SiteCopy["partners"] }) {
 }
 
 type DownloadPlatform = keyof SiteCopy["download"]["platforms"];
-type DownloadChannel = "stable" | "preview" | "unsigned-preview";
+type DownloadChannel = "stable" | "preview";
+type DownloadFormat = "dmg" | "zip" | "exe";
 
 type DownloadTarget = {
   channel: DownloadChannel;
+  format: DownloadFormat;
   href: string;
   sizeBytes: number | null;
   version: string;
@@ -240,7 +242,7 @@ type DownloadManifest = {
 };
 
 const codeSigningPolicyUrl =
-  "https://github.com/ducnguyen67201/TroApp/blob/main/README.md#windows-release-from-github-actions";
+  "https://github.com/ducnguyen67201/TroApp/blob/main/README.md#signed-macos-release-from-github-actions";
 const privacyPolicyUrl =
   "https://github.com/ducnguyen67201/asdfaefqwefq/blob/main/PRIVACY.md";
 const bundledDownloads: DownloadManifest = {
@@ -262,10 +264,10 @@ function downloadTarget(value: unknown): DownloadTarget | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Record<string, unknown>;
   const channel = candidate.channel;
+  const format = candidate.format;
   if (
-    !["stable", "preview", "unsigned-preview"].includes(
-      typeof channel === "string" ? channel : "",
-    ) ||
+    (channel !== "stable" && channel !== "preview") ||
+    (format !== "dmg" && format !== "zip" && format !== "exe") ||
     typeof candidate.href !== "string" ||
     !candidate.href.startsWith("/downloads/latest/") ||
     typeof candidate.sizeBytes !== "number" ||
@@ -277,7 +279,8 @@ function downloadTarget(value: unknown): DownloadTarget | null {
     return null;
   }
   return {
-    channel: channel as DownloadChannel,
+    channel,
+    format,
     href: candidate.href,
     sizeBytes: candidate.sizeBytes,
     version: candidate.version,
@@ -332,12 +335,12 @@ function useLatestDownloads(): DownloadManifest {
 
 function fileSize(target: DownloadTarget | null, fallback: string): string {
   if (!target?.sizeBytes) return fallback;
-  return `${Math.ceil(target.sizeBytes / (1024 * 1024))} MB`;
+  return `${Math.ceil(target.sizeBytes / (1024 * 1024))} MB ${target.format.toUpperCase()} · v${target.version}`;
 }
 
 function displayVersion(version: string | null, fallback: string): string {
   if (!version) return fallback;
-  return `v${version.replace(/-signpath-bootstrap\.\d+$/, "")}`;
+  return `v${version}`;
 }
 
 function platformPresentation(
@@ -347,13 +350,11 @@ function platformPresentation(
 ) {
   const option = copy.platforms[platform];
   const status =
-    target?.channel === "unsigned-preview"
-      ? copy.unsignedPreviewStatus
-      : target?.channel === "preview"
-        ? copy.previewStatus
-        : target
-          ? (option.availableStatus ?? option.status)
-          : option.status;
+    target?.channel === "preview"
+      ? copy.previewStatus
+      : target
+        ? (option.availableStatus ?? option.status)
+        : option.status;
   return {
     cta: target ? (option.availableCta ?? option.cta) : option.cta,
     size: fileSize(target, option.size),
@@ -429,11 +430,7 @@ function PlatformDownloadOption({
   if (href) {
     return (
       <a
-        className={`download-platform download-platform--available${
-          download?.channel === "unsigned-preview"
-            ? " download-platform--unsigned"
-            : ""
-        }`}
+        className="download-platform download-platform--available"
         href={href}
         download
       >
@@ -463,8 +460,8 @@ function DownloadSection({
   const allPlatformsAvailable = downloadPlatformOrder.every((platform) =>
     Boolean(manifest.platforms[platform]),
   );
-  const hasUnsignedPreview = downloadPlatformOrder.some(
-    (platform) => manifest.platforms[platform]?.channel === "unsigned-preview",
+  const hasPreview = downloadPlatformOrder.some(
+    (platform) => manifest.platforms[platform]?.channel === "preview",
   );
   return (
     <section
@@ -489,7 +486,7 @@ function DownloadSection({
           <div>
             <dt>{copy.sizeLabel}</dt>
             <dd>
-              {hasUnsignedPreview
+              {hasPreview
                 ? copy.previewPlatformsAvailable
                 : allPlatformsAvailable
                   ? copy.allPlatformsAvailable
@@ -514,11 +511,6 @@ function DownloadSection({
           ))}
         </div>
         <p className="download-access-note">{copy.accessNote}</p>
-        {hasUnsignedPreview ? (
-          <p className="download-unsigned-warning" role="status">
-            {copy.unsignedPreviewWarning}
-          </p>
-        ) : null}
         <p className="download-preview-note">{copy.previewNote}</p>
         <div className="download-policy-note">
           <p>{copy.signingDisclosure}</p>

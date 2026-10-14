@@ -98,7 +98,6 @@ export type SiteCopy = {
     allPlatformsAvailable: string;
     previewPlatformsAvailable: string;
     previewStatus: string;
-    unsignedPreviewStatus: string;
     platformsLabel: string;
     platforms: {
       macosApple: {
@@ -134,7 +133,6 @@ export type SiteCopy = {
     };
     accessNote: string;
     previewNote: string;
-    unsignedPreviewWarning: string;
     signingDisclosure: string;
     codeSigningPolicy: string;
     privacyPolicy: string;
@@ -275,22 +273,21 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       title: "Tro dành cho Mac và Windows.",
       body: "Chọn đúng phiên bản cho máy của bạn để nhận hướng dẫn bằng giọng nói và ngay trên màn hình khi đang học.",
       versionLabel: "Phiên bản",
-      version: "0.1.7",
+      version: "—",
       platformLabel: "Hệ điều hành",
       platform: "macOS + Windows",
       sizeLabel: "Tình trạng",
       size: "Đang tải thông tin bản phát hành",
       allPlatformsAvailable: "Mac Apple silicon, Mac Intel và Windows có sẵn",
-      previewPlatformsAvailable: "Có bản xem trước chưa ký cho máy tính",
+      previewPlatformsAvailable: "Có bản xem trước cho máy tính",
       previewStatus: "Bản xem trước",
-      unsignedPreviewStatus: "Bản xem trước chưa ký",
       platformsLabel: "Chọn phiên bản Tro cho máy tính",
       platforms: {
         macosApple: {
           badge: "MAC",
           name: "macOS · Apple",
           requirements: "macOS 13+ · Apple silicon",
-          size: "139 MB ZIP",
+          size: "Apple silicon",
           status: "Sắp ra mắt",
           cta: "Mac sắp ra mắt",
           availableStatus: "Có sẵn",
@@ -319,12 +316,10 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       },
       accessNote: "Đăng nhập bằng Google để bắt đầu sử dụng Tro.",
       previewNote:
-        "Các nút tải tự động trỏ tới bản phát hành Tro mới nhất trên GitHub.",
-      unsignedPreviewWarning:
-        "Các bản Mac hiện là bản xem trước chưa ký. macOS Gatekeeper có thể hiển thị cảnh báo trước khi cài đặt.",
+        "Các nút tải tự động chọn bản phát hành Tro mới nhất cho từng nền tảng trên GitHub.",
       signingDisclosure:
-        "Bản Windows được ký qua Microsoft Azure Artifact Signing với tên nhà phát hành Minh Duc Nguyen. Windows SmartScreen vẫn có thể hiển thị cảnh báo.",
-      codeSigningPolicy: "Thông tin ký mã Windows",
+        "Bản Mac được ký bằng Apple Developer ID và được Apple công chứng. Bản Windows được ký qua Microsoft Azure Artifact Signing với tên nhà phát hành Minh Duc Nguyen. macOS vẫn có thể yêu cầu xác nhận mở ứng dụng; Windows SmartScreen vẫn có thể hiển thị cảnh báo.",
+      codeSigningPolicy: "Thông tin ký mã",
       privacyPolicy: "Chính sách quyền riêng tư",
     },
     closing: {
@@ -461,23 +456,22 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       title: "Tro for Mac and Windows.",
       body: "Choose the right build for your computer to get voice and on-screen guidance while you study.",
       versionLabel: "Version",
-      version: "0.1.7",
+      version: "—",
       platformLabel: "Systems",
       platform: "macOS + Windows",
       sizeLabel: "Availability",
       size: "Loading release information",
       allPlatformsAvailable:
         "Apple silicon Mac, Intel Mac, and Windows available",
-      previewPlatformsAvailable: "Unsigned desktop previews available",
+      previewPlatformsAvailable: "Desktop previews available",
       previewStatus: "Preview",
-      unsignedPreviewStatus: "Unsigned preview",
       platformsLabel: "Choose a Tro desktop version",
       platforms: {
         macosApple: {
           badge: "MAC",
           name: "macOS · Apple",
           requirements: "macOS 13+ · Apple silicon",
-          size: "139 MB ZIP",
+          size: "Apple silicon",
           status: "Coming soon",
           cta: "Mac coming soon",
           availableStatus: "Available",
@@ -506,12 +500,10 @@ export const siteCopy: Record<Locale, SiteCopy> = {
       },
       accessNote: "Sign in with Google to start using Tro.",
       previewNote:
-        "Download buttons automatically follow the latest Tro release on GitHub.",
-      unsignedPreviewWarning:
-        "The current Mac builds are unsigned previews. macOS Gatekeeper may warn before installation.",
+        "Download buttons automatically select the latest Tro release for each platform on GitHub.",
       signingDisclosure:
-        "Windows builds are signed through Microsoft Azure Artifact Signing by Minh Duc Nguyen. Windows SmartScreen may still display a warning.",
-      codeSigningPolicy: "Windows signing details",
+        "Mac builds are signed with Apple Developer ID and notarized by Apple. Windows builds are signed through Microsoft Azure Artifact Signing by Minh Duc Nguyen. macOS may still ask you to confirm opening the app; Windows SmartScreen may still display a warning.",
+      codeSigningPolicy: "Signing details",
       privacyPolicy: "Privacy policy",
     },
     closing: {

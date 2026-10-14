@@ -1,42 +1,47 @@
-/** @typedef {{ repository: string, previewChannel: string, platforms: string[] }} ReleaseSource */
+/** @typedef {"macosApple" | "macosIntel" | "windows"} DownloadPlatform */
+/** @typedef {"dmg" | "zip" | "exe"} DownloadFormat */
+/** @typedef {{ name: string, size: number, url: string }} ReleaseAsset */
+/** @typedef {ReleaseAsset & { version: string, format: DownloadFormat }} Installer */
+/** @typedef {Installer & { channel: "stable" | "preview", publishedAt: string | null }} DownloadTarget */
+/** @typedef {{ platforms: Record<DownloadPlatform, DownloadTarget | null>, publishedAt: string | null, version: string | null }} DownloadRelease */
 
-/** @type {ReleaseSource} */
-const macReleaseSource = {
-  repository: "ducnguyen67201/asdfaefqwefq",
-  previewChannel: "unsigned-preview",
-  platforms: ["macosApple", "macosIntel"],
-};
-
-/** @type {ReleaseSource} */
-const windowsReleaseSource = {
-  repository: "ducnguyen67201/TroApp",
-  previewChannel: "preview",
-  platforms: ["windows"],
-};
+const releaseRepository = "ducnguyen67201/TroApp";
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const RELEASES_PER_PAGE = 100;
+const MAX_RELEASE_PAGES = 10;
 
 const downloadRoutes = {
   macosApple: "/downloads/latest/macos-arm64",
   macosIntel: "/downloads/latest/macos-x64",
   windows: "/downloads/latest/windows-x64",
 };
+/** @type {DownloadPlatform[]} */
+const platforms = ["macosApple", "macosIntel", "windows"];
 
+/** @type {DownloadRelease | null} */
 let cachedRelease = null;
 let cacheExpiresAt = 0;
+/** @type {Promise<DownloadRelease> | null} */
 let pendingRequest = null;
 
+/** @param {unknown} value @returns {value is Record<string, unknown>} */
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function releaseAsset(value, source) {
-  if (!isRecord(value)) return null;
+/** Accept only this release's exact asset URL in the signed app repository. */
+/** @param {unknown} value @param {string} tag @returns {ReleaseAsset | null} */
+function releaseAsset(value, tag) {
+  if (!isRecord(value)) {
+    return null;
+  }
+
   if (
     typeof value.name !== "string" ||
     typeof value.browser_download_url !== "string" ||
     typeof value.size !== "number" ||
     !Number.isSafeInteger(value.size) ||
-    value.size < 0
+    value.size <= 0
   ) {
     return null;
   }
@@ -47,163 +52,167 @@ function releaseAsset(value, source) {
   } catch {
     return null;
   }
-
+  const expectedPath = `/${releaseRepository}/releases/download/${encodeURIComponent(tag)}/${encodeURIComponent(value.name)}`;
   if (
-    downloadUrl.protocol !== "https:" ||
-    downloadUrl.hostname !== "github.com" ||
-    !downloadUrl.pathname
-      .toLowerCase()
-      .startsWith(`/${source.repository}/releases/download/`.toLowerCase())
+    downloadUrl.origin !== "https://github.com" ||
+    downloadUrl.username ||
+    downloadUrl.password ||
+    downloadUrl.search ||
+    downloadUrl.hash ||
+    downloadUrl.pathname !== expectedPath
   ) {
     return null;
   }
-
-  return {
-    name: value.name,
-    size: value.size,
-    url: downloadUrl.toString(),
-  };
+  return { name: value.name, size: value.size, url: downloadUrl.toString() };
 }
 
+/** Artifact versions stay correct even when a release tag is platform-qualified. */
+/** @param {ReleaseAsset[]} assets @param {"arm64" | "x64"} architecture @returns {Installer | null} */
 function findMacOSAsset(assets, architecture) {
-  return assets.find((asset) => {
-    const name = asset.name.toLowerCase();
-    return (
-      name.endsWith(".zip") &&
-      name.includes(architecture) &&
-      ["darwin", "mac", "osx"].some((platform) => name.includes(platform))
-    );
-  });
+  for (const format of /** @type {const} */ (["dmg", "zip"])) {
+    for (const asset of assets) {
+      const match =
+        /^Tro-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)-macos-(arm64|x64)\.(dmg|zip)$/.exec(
+          asset.name,
+        );
+      if (match?.[1] && match[2] === architecture && match[3] === format) {
+        return { ...asset, format, version: match[1] };
+      }
+    }
+  }
+  return null;
 }
 
+/** @param {ReleaseAsset[]} assets @returns {Installer | null} */
 function findWindowsAsset(assets) {
-  return assets.find((asset) => {
-    const name = asset.name.toLowerCase();
-    return (
-      name.endsWith(".exe") &&
-      name.includes("setup") &&
-      !name.includes("arm64") &&
-      !name.includes("ia32")
-    );
-  });
+  for (const asset of assets) {
+    const match =
+      /^Tro-(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)-windows-x64-setup\.exe$/.exec(
+        asset.name,
+      );
+    if (match?.[1]) {
+      return { ...asset, format: "exe", version: match[1] };
+    }
+  }
+  return null;
 }
 
-function parseRelease(value, expectedPrerelease, source) {
+/** @param {unknown} value @returns {DownloadRelease | null} */
+function parseRelease(value) {
   if (
     !isRecord(value) ||
-    value.draft === true ||
-    value.prerelease !== expectedPrerelease ||
+    value.draft !== false ||
+    typeof value.prerelease !== "boolean" ||
     typeof value.tag_name !== "string" ||
+    !value.tag_name.trim() ||
     !Array.isArray(value.assets)
   ) {
     return null;
   }
-
   const assets = value.assets
-    .map((asset) => releaseAsset(asset, source))
-    .filter(Boolean);
-  const version = value.tag_name.trim().replace(/^v/, "");
-  if (!version) return null;
-  const macosAppleAsset = findMacOSAsset(assets, "arm64") ?? null;
-  const macosIntelAsset = findMacOSAsset(assets, "x64") ?? null;
-  const windowsAsset = findWindowsAsset(assets) ?? null;
+    .map((asset) => releaseAsset(asset, value.tag_name))
+    .filter((asset) => asset !== null);
+  const publishedAt =
+    typeof value.published_at === "string" &&
+    Number.isFinite(Date.parse(value.published_at))
+      ? value.published_at
+      : null;
+  /** @param {Installer | null} asset @returns {DownloadTarget | null} */
   const releaseTarget = (asset) =>
     asset
       ? {
           ...asset,
-          channel: expectedPrerelease ? source.previewChannel : "stable",
-          version,
+          channel: value.prerelease ? "preview" : "stable",
+          publishedAt,
         }
       : null;
-
   return {
     platforms: {
-      macosApple: releaseTarget(macosAppleAsset),
-      macosIntel: releaseTarget(macosIntelAsset),
-      windows: releaseTarget(windowsAsset),
+      macosApple: releaseTarget(findMacOSAsset(assets, "arm64")),
+      macosIntel: releaseTarget(findMacOSAsset(assets, "x64")),
+      windows: releaseTarget(findWindowsAsset(assets)),
     },
-    publishedAt:
-      typeof value.published_at === "string" ? value.published_at : null,
-    version,
+    publishedAt,
+    version: null,
   };
 }
 
-export function parseLatestRelease(value, source = macReleaseSource) {
-  const release = parseRelease(value, false, source);
-  if (!release) {
-    throw new Error("GitHub returned invalid latest-release metadata.");
-  }
-  return release;
-}
-
-export function parsePreviewReleases(value, source = macReleaseSource) {
+/** Select each platform independently: its newest stable installer, then its newest preview. */
+/** @param {unknown} value @returns {DownloadRelease} */
+export function selectPlatformReleases(value) {
   if (!Array.isArray(value)) {
     throw new Error("GitHub returned invalid release-list metadata.");
   }
-
-  for (const candidate of value) {
-    const release = parseRelease(candidate, true, source);
-    if (source.platforms.some((platform) => release?.platforms[platform])) {
-      return release;
+  const releases = value
+    .map(parseRelease)
+    .filter((release) => release !== null);
+  releases.sort(
+    (left, right) =>
+      Date.parse(right.publishedAt ?? "1970-01-01") -
+      Date.parse(left.publishedAt ?? "1970-01-01"),
+  );
+  /** @type {DownloadRelease} */
+  const selected = {
+    platforms: { macosApple: null, macosIntel: null, windows: null },
+    publishedAt: null,
+    version: null,
+  };
+  for (const channel of ["stable", "preview"]) {
+    for (const release of releases) {
+      for (const platform of platforms) {
+        const asset = release.platforms[platform];
+        if (!selected.platforms[platform] && asset?.channel === channel) {
+          selected.platforms[platform] = asset;
+        }
+      }
     }
   }
-
-  return null;
-}
-
-function mergeReleaseChannels(stable, preview) {
-  if (!stable && !preview) {
-    throw new Error("No downloadable TroCode release is available.");
+  const newest = Object.values(selected.platforms)
+    .filter((asset) => asset !== null)
+    .sort(
+      (left, right) =>
+        Date.parse(right.publishedAt ?? "1970-01-01") -
+        Date.parse(left.publishedAt ?? "1970-01-01"),
+    )[0];
+  if (!newest) {
+    throw new Error("No downloadable Tro release is available.");
   }
 
-  return {
-    platforms: {
-      macosApple:
-        stable?.platforms.macosApple ?? preview?.platforms.macosApple ?? null,
-      macosIntel:
-        stable?.platforms.macosIntel ?? preview?.platforms.macosIntel ?? null,
-      windows: stable?.platforms.windows ?? preview?.platforms.windows ?? null,
-    },
-    publishedAt: stable?.publishedAt ?? preview?.publishedAt ?? null,
-    version: stable?.version ?? preview?.version ?? null,
-  };
+  selected.publishedAt = newest.publishedAt;
+  selected.version = newest.version;
+  return selected;
 }
 
+/** @param {DownloadRelease} release */
 export function publicDownloadMetadata(release) {
+  /** @param {DownloadPlatform} platform */
+  const metadata = (platform) => {
+    const asset = release.platforms[platform];
+    return asset
+      ? {
+          channel: asset.channel,
+          format: asset.format,
+          href: downloadRoutes[platform],
+          sizeBytes: asset.size,
+          version: asset.version,
+        }
+      : null;
+  };
   return {
     platforms: {
-      macosApple: release.platforms.macosApple
-        ? {
-            channel: release.platforms.macosApple.channel,
-            href: downloadRoutes.macosApple,
-            sizeBytes: release.platforms.macosApple.size,
-            version: release.platforms.macosApple.version,
-          }
-        : null,
-      macosIntel: release.platforms.macosIntel
-        ? {
-            channel: release.platforms.macosIntel.channel,
-            href: downloadRoutes.macosIntel,
-            sizeBytes: release.platforms.macosIntel.size,
-            version: release.platforms.macosIntel.version,
-          }
-        : null,
-      windows: release.platforms.windows
-        ? {
-            channel: release.platforms.windows.channel,
-            href: downloadRoutes.windows,
-            sizeBytes: release.platforms.windows.size,
-            version: release.platforms.windows.version,
-          }
-        : null,
+      macosApple: metadata("macosApple"),
+      macosIntel: metadata("macosIntel"),
+      windows: metadata("windows"),
     },
     publishedAt: release.publishedAt,
     version: release.version,
   };
 }
 
-async function requestSourceRelease(fetchImplementation, source) {
-  const releasesUrl = `https://api.github.com/repos/${source.repository}/releases`;
+/** Fetch one shared history so a newer Mac-only release cannot hide an older Windows installer. */
+/** @param {typeof fetch} fetchImplementation @returns {Promise<DownloadRelease>} */
+async function requestLatestRelease(fetchImplementation) {
+  const releasesUrl = `https://api.github.com/repos/${releaseRepository}/releases`;
   const headers = {
     Accept: "application/vnd.github+json",
     "User-Agent": "Tro-landing-download-resolver",
@@ -213,63 +222,46 @@ async function requestSourceRelease(fetchImplementation, source) {
     headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
   }
 
-  const stableResponse = await fetchImplementation(`${releasesUrl}/latest`, {
-    headers,
-  });
-  let stable = null;
-  if (stableResponse.ok) {
-    stable = parseLatestRelease(await stableResponse.json(), source);
-    if (source.platforms.every((platform) => stable.platforms[platform])) {
-      return stable;
+  /** @type {unknown[]} */
+  const releases = [];
+  for (let page = 1; page <= MAX_RELEASE_PAGES; page += 1) {
+    const response = await fetchImplementation(
+      `${releasesUrl}?per_page=${RELEASES_PER_PAGE}&page=${page}`,
+      { headers, signal: AbortSignal.timeout(10_000) },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `GitHub release-list request failed with ${response.status}.`,
+      );
     }
-  } else if (stableResponse.status !== 404) {
-    throw new Error(
-      `GitHub latest-release request failed with ${stableResponse.status}.`,
-    );
-  }
+    const value = await response.json();
+    if (!Array.isArray(value)) {
+      throw new Error("GitHub returned invalid release-list metadata.");
+    }
 
-  const releasesResponse = await fetchImplementation(
-    `${releasesUrl}?per_page=20`,
-    {
-      headers,
-    },
-  );
-  if (!releasesResponse.ok) {
-    throw new Error(
-      `GitHub release-list request failed with ${releasesResponse.status}.`,
-    );
+    releases.push(...value);
+    if (value.length < RELEASES_PER_PAGE) {
+      return selectPlatformReleases(releases);
+    }
   }
-
-  return mergeReleaseChannels(
-    stable,
-    parsePreviewReleases(await releasesResponse.json(), source),
+  throw new Error(
+    "GitHub release history exceeded the download resolver limit.",
   );
 }
 
-/** Keep each platform tied to its release owner; never fall back to legacy Windows builds. */
-async function requestLatestRelease(fetchImplementation) {
-  const [macRelease, windowsRelease] = await Promise.all([
-    requestSourceRelease(fetchImplementation, macReleaseSource),
-    requestSourceRelease(fetchImplementation, windowsReleaseSource),
-  ]);
-  return {
-    platforms: {
-      macosApple: macRelease.platforms.macosApple,
-      macosIntel: macRelease.platforms.macosIntel,
-      windows: windowsRelease.platforms.windows,
-    },
-    publishedAt: windowsRelease.publishedAt,
-    version: windowsRelease.version,
-  };
-}
-
+/** @param {{ fetchImplementation?: typeof fetch, now?: () => number }} options */
 export async function latestRelease({
   fetchImplementation = fetch,
   now = Date.now,
 } = {}) {
   const timestamp = now();
-  if (cachedRelease && timestamp < cacheExpiresAt) return cachedRelease;
-  if (pendingRequest) return pendingRequest;
+  if (cachedRelease && timestamp < cacheExpiresAt) {
+    return cachedRelease;
+  }
+
+  if (pendingRequest) {
+    return pendingRequest;
+  }
 
   pendingRequest = requestLatestRelease(fetchImplementation)
     .then((release) => {
@@ -278,13 +270,15 @@ export async function latestRelease({
       return release;
     })
     .catch((error) => {
-      if (cachedRelease) return cachedRelease;
+      if (cachedRelease) {
+        return cachedRelease;
+      }
+
       throw error;
     })
     .finally(() => {
       pendingRequest = null;
     });
-
   return pendingRequest;
 }
 
@@ -294,13 +288,12 @@ export function resetReleaseCache() {
   pendingRequest = null;
 }
 
+/** @param {DownloadRelease} release @param {string} pathname @returns {DownloadTarget | null} */
 export function releaseDownload(release, pathname) {
-  if (pathname === downloadRoutes.macosApple) {
-    return release.platforms.macosApple;
+  for (const platform of platforms) {
+    if (pathname === downloadRoutes[platform]) {
+      return release.platforms[platform];
+    }
   }
-  if (pathname === downloadRoutes.macosIntel) {
-    return release.platforms.macosIntel;
-  }
-  if (pathname === downloadRoutes.windows) return release.platforms.windows;
   return null;
 }
